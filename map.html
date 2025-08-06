@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>云旅行地图</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            width: 300px;
+            height: 200px;
+            border-radius: 10px;
+            border: 1px solid #eee;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+            -webkit-app-region: drag; /* 添加拖动区域 */
+        }
+        
+        .map-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #f0f8ff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .header {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            -webkit-app-region: no-drag; /* 头部区域不拖动 */
+        }
+        
+        .traveler {
+            position: absolute;
+            transition: all 2s linear;
+            z-index: 5;
+            width: 30px;
+            height: 30px;
+            -webkit-app-region: no-drag;
+        }
+        
+        .destination {
+            position: absolute;
+            right: 20px;
+            bottom: 30px;
+            font-size: 24px;
+            -webkit-app-region: no-drag;
+        }
+        
+        .weather {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            -webkit-app-region: no-drag;
+        }
+        
+        .progress-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+            -webkit-app-region: no-drag;
+        }
+        
+        .progress {
+            height: 100%;
+            background: #4a6cf7;
+            width: 30%;
+            border-radius: 3px;
+            transition: width 1s linear;
+        }
+        
+        .status-text {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            font-size: 12px;
+            color: #333;
+            -webkit-app-region: no-drag;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            color: #999;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            -webkit-app-region: no-drag;
+        }
+        
+        .close-btn:hover {
+            background: #f0f0f0;
+        }
+        
+        /* 像素化地图 */
+        .pixel-map {
+            position: absolute;
+            top: 40px;
+            left: 10px;
+            right: 10px;
+            bottom: 40px;
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            grid-template-rows: repeat(12, 1fr);
+            gap: 1px;
+            background: #e0e0e0;
+            border: 1px solid #ccc;
+            -webkit-app-region: no-drag;
+        }
+        
+        .pixel {
+            background: #8FBC8F;
+            border: 1px solid #2E8B57;
+        }
+        
+        .pixel.water {
+            background: #87CEEB;
+            border: 1px solid #4682B4;
+        }
+        
+        .pixel.mountain {
+            background: #808080;
+            border: 1px solid #696969;
+        }
+        
+        .pixel.sand {
+            background: #F0E68C;
+            border: 1px solid #DAA520;
+        }
+        
+        .pixel.forest {
+            background: #228B22;
+            border: 1px solid #006400;
+        }
+        
+        .pixel-path {
+            position: absolute;
+            background: #FF0000;
+            border-radius: 50%;
+            width: 10px;
+            height: 10px;
+            z-index: 4;
+            -webkit-app-region: no-drag;
+        }
+        
+        /* 拖动手柄 */
+        .drag-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            -webkit-app-region: drag;
+            cursor: move;
+        }
+    </style>
+</head>
+<body>
+    <div class="drag-handle" id="dragHandle"></div>
+    
+    <div class="map-container">
+        <button class="close-btn" id="closeBtn">×</button>
+        
+        <div class="header">
+            <span id="time-icon">🌞</span>
+            <span>广州 → 冰岛</span>
+        </div>
+        
+        <div class="weather">❄️</div>
+        
+        <!-- 像素化地图 -->
+        <div class="pixel-map" id="pixelMap"></div>
+        
+        <!-- 路径点 -->
+        <div class="pixel-path" id="travelerPath" style="left: 20px; top: 80px;"></div>
+        
+        <div class="destination">🌌</div>
+        
+        <div class="progress-bar">
+            <div class="progress" id="progress"></div>
+        </div>
+        
+        <div class="status-text">
+            预计18小时后抵达，每小时寄回一张像素图
+        </div>
+    </div>
+    
+    <script>
+        const closeBtn = document.getElementById('closeBtn');
+        const pixelMap = document.getElementById('pixelMap');
+        const travelerPath = document.getElementById('travelerPath');
+        const progress = document.getElementById('progress');
+        const timeIcon = document.getElementById('time-icon');
+        const dragHandle = document.getElementById('dragHandle');
+        
+        closeBtn.addEventListener('click', () => {
+            window.close();
+        });
+        
+        // 根据时间切换日/夜图标
+        const hour = new Date().getHours();
+        if (hour >= 18 || hour < 6) {
+            timeIcon.textContent = '🌙';
+        }
+        
+        // 创建像素地图
+        function createPixelMap() {
+            // 清空地图
+            pixelMap.innerHTML = '';
+            
+            // 创建20x12的像素地图
+            for (let i = 0; i < 12; i++) {
+                for (let j = 0; j < 20; j++) {
+                    const pixel = document.createElement('div');
+                    pixel.className = 'pixel';
+                    
+                    // 随机生成不同类型地形
+                    const rand = Math.random();
+                    if (rand < 0.2) {
+                        pixel.classList.add('water');
+                    } else if (rand < 0.3) {
+                        pixel.classList.add('mountain');
+                    } else if (rand < 0.4) {
+                        pixel.classList.add('sand');
+                    } else if (rand < 0.6) {
+                        pixel.classList.add('forest');
+                    }
+                    
+                    pixelMap.appendChild(pixel);
+                }
+            }
+        }
+        
+        // 初始化地图
+        createPixelMap();
+        
+        // 模拟旅星移动动画
+        let posX = 20;
+        let posY = 80;
+        const moveInterval = setInterval(() => {
+            // 随机移动
+            posX += Math.random() * 6 - 3;
+            posY += Math.random() * 4 - 2;
+            
+            // 限制在地图范围内
+            posX = Math.max(20, Math.min(270, posX));
+            posY = Math.max(50, Math.min(150, posY));
+            
+            travelerPath.style.left = posX + 'px';
+            travelerPath.style.top = posY + 'px';
+            
+            // 更新进度条
+            const progressPercent = Math.min((posX / 270) * 100, 100);
+            progress.style.width = progressPercent + '%';
+            
+            // 到达目的地附近时停止
+            if (posX >= 260) {
+                clearInterval(moveInterval);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

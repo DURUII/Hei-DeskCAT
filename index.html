@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>DeskTripper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background: white;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        p {
+            font-size: 18px;
+            max-width: 600px;
+            text-align: center;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            color: #666;
+        }
+
+        .status {
+            background: #f5f5f5;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .features {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .feature {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+            width: 180px;
+            text-align: center;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease;
+        }
+
+        .feature:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .pet-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: #f0f0f0;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .pet-container:hover {
+            transform: scale(1.1);
+            background: #e0e0e0;
+        }
+
+        .pet-container:active {
+            transform: scale(0.95);
+        }
+
+        .pet-svg {
+            width: 60px;
+            height: 60px;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: #4a6cf7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #3a5ce5;
+        }
+
+        .instructions {
+            background: #f0f8ff;
+            border: 1px solid #d0e8ff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            max-width: 600px;
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+        }
+
+        .instructions ul {
+            text-align: left;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="logo">🌍</div>
+    <h1>DeskTripper</h1>
+    <p>你的桌面小旅星 - 截图即响应，久坐会提醒，云旅行进行中</p>
+
+    <div class="status">
+        ✅ 应用已启动
+    </div>
+
+    <div class="features">
+        <div class="feature">
+            <div class="feature-icon">📸</div>
+            <div>截图响应</div>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">⏰</div>
+            <div>久坐提醒</div>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">🗺️</div>
+            <div>云旅行地图</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" id="waterBtn">触发喝水提醒 (F3)</button>
+        <button class="btn" id="funBtn">触发趣味提醒 (F4)</button>
+        <button class="btn" id="statusBtn">查看旅程状态</button>
+    </div>
+
+    <div class="instructions">
+        <h3>使用说明</h3>
+        <ul>
+            <li>按 <strong>F2</strong> 键截图，触发旅行响应</li>
+            <li>按 <strong>F4</strong> 键手动触发喝水提醒</li>
+            <li>按 <strong>F5</strong> 键手动触发趣味提醒</li>
+            <li>点击右下角宠物可查看当前状态</li>
+            <li>应用会自动检测你的活动状态并提醒</li>
+        </ul>
+    </div>
+
+    <!-- 桌面宠物主体 -->
+    <div class="pet-container" id="pet">
+        <svg class="pet-svg" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="#FFD6A5" />
+            <circle cx="35" cy="40" r="5" fill="#333" />
+            <circle cx="65" cy="40" r="5" fill="#333" />
+            <path d="M 30 65 Q 50 80 70 65" stroke="#333" stroke-width="3" fill="none" />
+        </svg>
+    </div>
+
+    <script>
+        // 添加宠物点击交互
+        const pet = document.getElementById('pet');
+        const waterBtn = document.getElementById('waterBtn');
+        const funBtn = document.getElementById('funBtn');
+        const statusBtn = document.getElementById('statusBtn');
+
+        // 宠物随机动作
+        const petSVG = pet.querySelector('.pet-svg');
+        setInterval(() => {
+            const expressions = [
+                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
+                <circle cx="35" cy="40" r="5" fill="#333" />
+                <circle cx="65" cy="40" r="5" fill="#333" />
+                <path d="M 30 65 Q 50 80 70 65" stroke="#333" stroke-width="3" fill="none" />`,
+
+                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
+                <circle cx="35" cy="40" r="5" fill="#333" />
+                <circle cx="65" cy="40" r="5" fill="#333" />
+                <path d="M 30 70 Q 50 60 70 70" stroke="#333" stroke-width="3" fill="none" />`,
+
+                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
+                <circle cx="30" cy="40" r="5" fill="#333" />
+                <circle cx="70" cy="40" r="5" fill="#333" />
+                <circle cx="50" cy="60" r="8" fill="#333" />`,
+
+                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
+                <circle cx="35" cy="35" r="5" fill="#333" />
+                <circle cx="65" cy="35" r="5" fill="#333" />
+                <path d="M 40 70 Q 50 65 60 70" stroke="#333" stroke-width="3" fill="none" />`
+            ];
+
+            petSVG.innerHTML = expressions[Math.floor(Math.random() * expressions.length)];
+        }, 5000);
+
+        // 点击宠物显示当前状态
+        pet.addEventListener('click', () => {
+            // 发送IPC消息查看旅程状态
+            require('electron').ipcRenderer.send('check-journey-status');
+        });
+
+        // 按钮事件
+        waterBtn.addEventListener('click', () => {
+            // 发送IPC消息触发喝水提醒
+            require('electron').ipcRenderer.send('manual-water-reminder');
+        });
+
+        funBtn.addEventListener('click', () => {
+            // 发送IPC消息触发趣味提醒
+            require('electron').ipcRenderer.send('manual-fun-reminder');
+        });
+
+        statusBtn.addEventListener('click', () => {
+            // 发送IPC消息查看旅程状态
+            require('electron').ipcRenderer.send('check-journey-status');
+        });
+    </script>
+</body>
+
+</html>

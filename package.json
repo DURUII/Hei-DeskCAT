@@ -1,0 +1,37 @@
+{
+  "name": "desktripper",
+  "version": "0.9.0",
+  "description": "A desktop companion that responds to screenshots and provides travel companionship",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeskTripper/DeskTripper.git"
+  },
+  "keywords": [
+    "electron",
+    "travel",
+    "screenshot",
+    "companion",
+    "desktop"
+  ],
+  "author": "DeskTripper Team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DeskTripper/DeskTripper/issues"
+  },
+  "homepage": "https://github.com/DeskTripper/DeskTripper#readme",
+  "devDependencies": {
+    "electron": "^21.0.0",
+    "electron-builder": "^23.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "electron-store": "^8.1.0",
+    "openai": "^4.0.0"
+  }
+}
