@@ -1,8 +1,6 @@
 # DeskTripper 🌍
 
-你的桌面小旅星 - 截图即响应，久坐会提醒喝水，云旅行进行中
-
-> 
+你的桌面小旅星 - 截图即响应，久坐会提醒，云旅行进行中
 
 ## 简介
 
@@ -37,6 +35,7 @@ DeskTripper是一款创新的桌面伴侣应用，它能：
 - HTML/CSS/JavaScript: 前端界面技术
 - electron-store: 本地数据存储
 - OpenAI API (阿里云百炼平台): AI内容生成
+- 高德地图API: 地图服务和路径规划
 
 ## 安装与运行
 
@@ -50,10 +49,10 @@ cd DeskTripper
 # 安装依赖
 npm install
 
-# 配置API Key（可选，用于AI功能）
-# 复制.env.example为.env，并填入您的阿里云百炼平台API Key
+# 配置API Key（可选，用于AI功能和地图功能）
+# 复制.env.example为.env，并填入您的API Key
 cp .env.example .env
-# 编辑.env文件，填入您的DASHSCOPE_API_KEY
+# 编辑.env文件，填入您的DASHSCOPE_API_KEY和AMAP_KEY
 
 # 启动应用
 npm start
@@ -71,16 +70,33 @@ npm start
 - 只有风景等内容才会触发旅行功能
 - 所有回复都由AI生成，更加智能有趣
 
-## AI功能配置
+## 高德地图功能说明
 
+应用集成了高德地图API，提供以下功能：
+- 路径规划：计算旅星移动路线
+- 天气查询：获取目的地实时天气
+- 地点搜索：根据关键词搜索地点
+- 静态地图：生成基础地图图片
+
+## API功能配置
+
+### 阿里云百炼平台配置
 1. 注册[阿里云百炼平台](https://dashscope.aliyun.com/)账号
 2. 获取API Key
-3. 复制`.env.example`文件为`.env`
-4. 在`.env`文件中填入您的API Key:
+3. 在`.env`文件中填入您的API Key:
    ```
    DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
-5. 重启应用以使配置生效
+
+### 高德地图API配置
+1. 注册[高德地图开放平台](https://console.amap.com/)账号
+2. 创建应用并获取API Key
+3. 在`.env`文件中填入您的API Key:
+   ```
+   AMAP_KEY=your_amap_api_key_here
+   ```
+
+4. 重启应用以使配置生效
 
 ## 快捷键说明
 
@@ -112,3 +128,7 @@ npm start
 - 气泡最多22字，超出用"…"折叠
 - 情绪化颜色反馈：不同情绪用不同颜色表示
 - 有趣的微交互和动效
+
+## 许可证
+
+MIT
