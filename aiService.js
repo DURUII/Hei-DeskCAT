@@ -20,11 +20,11 @@ async function analyzeScreenshot(base64Image) {
             // 随机决定是否触发旅行（模拟AI判断）
             const shouldTravel = Math.random() > 0.5;
             const defaultResponses = [
-                "替你去看极光？",
-                "这个风景好美，替你去看看？",
-                "要去这个地方旅行吗？"
+                "替你去看北京天安门？",
+                "这个风景好美，替你去北京看看？",
+                "要去北京旅行吗？"
             ];
-
+            
             if (shouldTravel) {
                 return {
                     message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
@@ -42,20 +42,20 @@ async function analyzeScreenshot(base64Image) {
                 };
             }
         }
-
+        
         const completion = await openai.chat.completions.create({
             model: "qwen-vl-plus",
             messages: [
-                {
-                    role: "system",
-                    content: "你是一个有趣的桌面伴侣助手。用户会发送截图给你，你需要根据截图内容给出有趣的回应。如果截图内容是风景、旅游景点等适合旅行的地方，可以询问用户是否要替他们去看看，请用简体中文回复，回应应该简短、有趣且富有想象力，不超过20个字。请在回复末尾添加一个标签：#travel表示建议旅行，#other表示其他内容。"
+                { 
+                    role: "system", 
+                    content: "你是一个有趣的桌面伴侣助手。用户会发送截图给你，你需要根据截图内容给出有趣的回应。如果截图内容是风景、旅游景点等适合旅行的地方，可以询问用户是否要替他们去看看，格式如'替你去看[地点]？'。如果是其他内容，给出合适的有趣回应。请用简体中文回复，回应应该简短、有趣且富有想象力，不超过20个字。请在回复末尾添加一个标签：#travel表示建议旅行，#other表示其他内容。" 
                 },
-                {
-                    role: "user",
+                { 
+                    role: "user", 
                     content: [
                         {
                             type: "text",
-                            text: "我刚截了一张图，快看"
+                            text: "我刚截了一张图，你能看出这是什么吗？"
                         },
                         {
                             type: "image_url",
@@ -68,13 +68,13 @@ async function analyzeScreenshot(base64Image) {
             ],
             max_tokens: 100
         });
-
+        
         const aiResponse = completion.choices[0].message.content.trim();
         // 检查是否包含#travel标签
         const shouldTravel = aiResponse.includes("#travel");
         // 移除标签
         const cleanMessage = aiResponse.replace("#travel", "").replace("#other", "").trim();
-
+        
         return {
             message: cleanMessage,
             shouldTravel: shouldTravel
@@ -84,11 +84,11 @@ async function analyzeScreenshot(base64Image) {
         // 出错时返回默认响应
         const shouldTravel = Math.random() > 0.5;
         const defaultResponses = [
-            "替你去看极光？",
-            "这个风景好美，替你去看看？",
-            "要去这个地方旅行吗？"
+            "替你去看北京天安门？",
+            "这个风景好美，替你去北京看看？",
+            "要去北京旅行吗？"
         ];
-
+        
         if (shouldTravel) {
             return {
                 message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
@@ -126,22 +126,22 @@ async function generateFunReminder() {
             ];
             return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
         }
-
+        
         const completion = await openai.chat.completions.create({
             model: "qwen-plus",
             messages: [
-                {
-                    role: "system",
-                    content: "你是一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字。"
+                { 
+                    role: "system", 
+                    content: "你是一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字。" 
                 },
-                {
-                    role: "user",
-                    content: "给我生成一个有趣的提醒消息"
+                { 
+                    role: "user", 
+                    content: "给我生成一个有趣的提醒消息" 
                 }
             ],
             max_tokens: 50
         });
-
+        
         return completion.choices[0].message.content.trim();
     } catch (error) {
         console.error('AI生成提醒时出错:', error);
@@ -167,40 +167,40 @@ async function generateJourneyStatus() {
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("未配置API Key，返回默认状态");
             const defaultStatuses = [
-                "正在冰岛看极光✨",
-                "在挪威森林里探险🌲",
-                "于撒哈拉沙漠看星星🌟",
-                "在日本樱花树下喝茶🌸",
-                "在瑞士阿尔卑斯山滑雪⛷️"
+                "正在北京天安门广场看升旗仪式🇨🇳",
+                "在故宫里探索历史文化🏯",
+                "于长城上感受雄伟壮丽🏰",
+                "在颐和园中欣赏湖光山色🏞️",
+                "在胡同里体验老北京风情🏘️"
             ];
             return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
         }
-
+        
         const completion = await openai.chat.completions.create({
             model: "qwen-plus",
             messages: [
-                {
-                    role: "system",
-                    content: "你是一个有趣的桌面伴侣助手。用户有一个正在旅行的小旅星，你需要描述它当前的状态和位置。保持简短，不超过20个字。"
+                { 
+                    role: "system", 
+                    content: "你是一个有趣的桌面伴侣助手。用户有一个正在旅行的小旅星，你需要描述它当前的状态和位置。保持简短，不超过20个字。" 
                 },
-                {
-                    role: "user",
-                    content: "我的小旅星现在在哪里？在做什么？"
+                { 
+                    role: "user", 
+                    content: "我的小旅星现在在哪里？在做什么？" 
                 }
             ],
             max_tokens: 50
         });
-
+        
         return completion.choices[0].message.content.trim();
     } catch (error) {
         console.error('AI生成旅程状态时出错:', error);
         // 出错时返回默认状态
         const defaultStatuses = [
-            "正在冰岛看极光✨",
-            "在挪威森林里探险🌲",
-            "于撒哈拉沙漠看星星🌟",
-            "在日本樱花树下喝茶🌸",
-            "在瑞士阿尔卑斯山滑雪⛷️"
+            "正在北京天安门广场看升旗仪式🇨🇳",
+            "在故宫里探索历史文化🏯",
+            "于长城上感受雄伟壮丽🏰",
+            "在颐和园中欣赏湖光山色🏞️",
+            "在胡同里体验老北京风情🏘️"
         ];
         return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
     }

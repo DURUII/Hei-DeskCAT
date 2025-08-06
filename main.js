@@ -1,10 +1,14 @@
 // 加载环境变量
 require('dotenv').config();
 
+// 设置字符编码以解决乱码问题
+process.env.LANG = 'zh_CN.UTF-8';
+
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
 const path = require('path');
 const ActivityMonitor = require('./activityMonitor');
 const { analyzeScreenshot, generateFunReminder, generateJourneyStatus } = require('./aiService');
+const AMapService = require('./amapService');
 
 // 禁用GPU加速以解决Passthrough错误
 app.disableHardwareAcceleration();
@@ -24,6 +28,7 @@ let bubbleWindow;
 let waterReminderWindow;
 let petWindow;
 let activityMonitor;
+let amapService;
 
 // 创建主窗口
 function createMainWindow() {
@@ -91,7 +96,17 @@ function createPetWindow() {
 }
 
 // 创建地图窗口
-function createMapWindow() {
+function createMapWindow(travelData = { origin: '武汉光谷', destination: '北京天安门' }) {
+  console.log('创建地图窗口，旅行数据:', travelData);
+  
+  // 清理旅行数据中的乱码字符
+  const cleanTravelData = {
+    origin: cleanText(travelData.origin) || '武汉光谷',
+    destination: cleanText(travelData.destination) || '北京天安门'
+  };
+  
+  console.log('清理后的旅行数据:', cleanTravelData);
+  
   mapWindow = new BrowserWindow({
     width: 300,
     height: 200,
@@ -117,7 +132,41 @@ function createMapWindow() {
     50
   );
   
+  // 通过IPC将高德地图API Key和旅行信息传递给地图窗口
+  mapWindow.webContents.once('dom-ready', () => {
+    // 传递API Key
+    console.log('传递API Key到地图窗口');
+    mapWindow.webContents.executeJavaScript(`
+      window.AMAP_KEY = '${process.env.AMAP_KEY || ''}';
+      console.log('API Key在地图窗口中设置为:', window.AMAP_KEY ? window.AMAP_KEY.substring(0, 10) + '...' : '未设置');
+    `);
+    
+    // 发送旅行信息
+    console.log('发送旅行信息到地图窗口');
+    setTimeout(() => {
+      mapWindow.webContents.send('travel-info', cleanTravelData);
+    }, 1000);
+  });
+  
+  // 监听地图窗口请求旅行信息
+  ipcMain.on('request-travel-info', () => {
+    console.log('地图窗口请求旅行信息');
+    if (mapWindow && !mapWindow.isDestroyed()) {
+      mapWindow.webContents.send('travel-info', cleanTravelData);
+    }
+  });
+  
   return mapWindow;
+}
+
+// 清理文本中的乱码字符
+function cleanText(text) {
+  if (!text) return text;
+  
+  // 移除常见的乱码字符
+  return text.replace(/[^\x20-\x7E\u4e00-\u9fa5]/g, '')
+             .replace(/[^a-zA-Z0-9\u4e00-\u9fa5\s\-_]/g, '')
+             .trim();
 }
 
 // 创建通知气泡窗口
@@ -204,7 +253,7 @@ async function captureScreenshot() {
   
   // 默认响应
   return {
-    message: "替你去看极光？",
+    message: "替你去看北京天安门？",
     shouldTravel: true
   };
 }
@@ -221,6 +270,7 @@ function registerScreenshotListener() {
       
       // 捕获并分析截图
       const aiResponse = await captureScreenshot();
+      console.log('AI分析结果:', aiResponse);
       
       // 使用Windows原生通知显示AI回复
       const notification = {
@@ -326,7 +376,27 @@ function showScreenshotBubble(message) {
 // IPC事件处理：开始旅程
 ipcMain.on('start-journey', async (event, data) => {
   console.log('Starting journey to:', data.destination);
-  createMapWindow();
+  
+  // 提取目的地信息（从AI回复中提取地点名）
+  let destination = '北京天安门';
+  if (data.destination) {
+    // 尝试从"替你去看[地点]？"格式中提取地点
+    const match = data.destination.match(/替你去看(.+)[？\?]/);
+    if (match && match[1]) {
+      destination = match[1];
+    } else {
+      destination = data.destination;
+    }
+  }
+  
+  // 创建地图窗口并传递旅行数据
+  const travelData = {
+    origin: '武汉光谷',
+    destination: destination
+  };
+  
+  console.log('创建地图窗口，旅行数据:', travelData);
+  createMapWindow(travelData);
   
   // 可以在这里添加更多旅程启动逻辑
 });
@@ -393,6 +463,17 @@ ipcMain.on('check-journey-status', async () => {
 
 // 应用准备就绪时执行
 app.whenReady().then(() => {
+  // 初始化高德地图服务
+  amapService = new AMapService();
+  console.log('高德地图服务初始化完成');
+  
+  // 检查API Key配置
+  if (process.env.AMAP_KEY) {
+    console.log('高德地图API Key已配置');
+  } else {
+    console.log('警告: 高德地图API Key未配置');
+  }
+  
   // 等待一会儿再注册快捷键，避免冲突
   setTimeout(() => {
     createMainWindow();
@@ -426,4 +507,7 @@ app.on('will-quit', () => {
   if (activityMonitor) {
     activityMonitor.destroy();
   }
+  
+  // 移除IPC监听器
+  ipcMain.removeAllListeners('request-travel-info');
 });
