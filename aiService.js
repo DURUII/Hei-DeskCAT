@@ -7,6 +7,39 @@ const openai = new OpenAI({
 });
 
 /**
+ * 从AI响应文本中提取回退信息
+ * @param {string} response - AI的原始响应文本
+ * @returns {Object} 提取的响应对象
+ */
+function extractFallbackResponse(response) {
+    // 尝试从文本中提取信息
+    const lowerResponse = response.toLowerCase();
+
+    // 检查是否包含旅行相关关键词
+    const travelKeywords = ['旅行', '旅游', '景点', '风景', '地标', '建筑', '城市', '国家', '地区'];
+    const shouldTravel = travelKeywords.some(keyword => lowerResponse.includes(keyword));
+
+    // 提取消息内容（移除可能的标签）
+    let message = response
+        .replace(/#travel/gi, '')
+        .replace(/#other/gi, '')
+        .replace(/shouldTravel:\s*(true|false)/gi, '')
+        .replace(/confidence:\s*\d+\.?\d*/gi, '')
+        .trim();
+
+    // 如果消息为空，使用默认消息
+    if (!message) {
+        message = shouldTravel ? "这个风景好美，替你去看看？" : "这看起来很有趣！";
+    }
+
+    return {
+        message: message,
+        shouldTravel: shouldTravel,
+        confidence: shouldTravel ? 0.6 : 0.5
+    };
+}
+
+/**
  * 分析截图内容并生成响应
  * @param {string} base64Image - 截图的base64编码
  * @returns {Promise<Object>} 生成的响应文本和是否触发旅行的标志
@@ -16,7 +49,7 @@ async function analyzeScreenshot(base64Image) {
     try {
         // 如果没有配置API Key，则返回默认响应
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
-            console.log("未配置API Key，返回默认响应");
+            console.log("API Key not configured, returning default response");
             // 随机决定是否触发旅行（模拟AI判断）
             const shouldTravel = Math.random() > 0.5;
             const defaultResponses = [
@@ -24,11 +57,12 @@ async function analyzeScreenshot(base64Image) {
                 "这个风景好美，替你去北京看看？",
                 "要去北京旅行吗？"
             ];
-            
+
             if (shouldTravel) {
                 return {
                     message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
-                    shouldTravel: true
+                    shouldTravel: true,
+                    confidence: 0.7
                 };
             } else {
                 const nonTravelResponses = [
@@ -38,24 +72,42 @@ async function analyzeScreenshot(base64Image) {
                 ];
                 return {
                     message: nonTravelResponses[Math.floor(Math.random() * nonTravelResponses.length)],
-                    shouldTravel: false
+                    shouldTravel: false,
+                    confidence: 0.6
                 };
             }
         }
-        
+
         const completion = await openai.chat.completions.create({
-            model: "qwen-vl-plus",
+            model: "qwen-plus",
             messages: [
-                { 
-                    role: "system", 
-                    content: "你是一个有趣的桌面伴侣助手。用户会发送截图给你，你需要根据截图内容给出有趣的回应。如果截图内容是风景、旅游景点等适合旅行的地方，可以询问用户是否要替他们去看看，格式如'替你去看[地点]？'。如果是其他内容，给出合适的有趣回应。请用简体中文回复，回应应该简短、有趣且富有想象力，不超过20个字。请在回复末尾添加一个标签：#travel表示建议旅行，#other表示其他内容。" 
+                {
+                    role: "system",
+                    content: `你是一个有趣的桌面伴侣助手。用户会发送截图给你，你需要分析截图内容并给出回应。
+
+                    分析规则：
+                    1. 如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
+                    2. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应但不建议旅行
+                    3. 回应应该简短、有趣且富有想象力，不超过20个字
+
+                    请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等markdown关键字：
+                    {
+                    "message": "你的回应内容",
+                    "shouldTravel": true/false,
+                    "confidence": 0.8
+                    }
+
+                    其中：
+                    - message: 回应内容（简体中文）
+                    - shouldTravel: 是否建议旅行（true/false）
+                    - confidence: 分析置信度（0.0-1.0）`
                 },
-                { 
-                    role: "user", 
+                {
+                    role: "user",
                     content: [
                         {
                             type: "text",
-                            text: "我刚截了一张图，你能看出这是什么吗？"
+                            text: "我刚截了一张图，你能看出这是什么吗？请分析并按照指定格式回复。"
                         },
                         {
                             type: "image_url",
@@ -66,21 +118,44 @@ async function analyzeScreenshot(base64Image) {
                     ]
                 }
             ],
-            max_tokens: 100
+            max_tokens: 200,
+            temperature: 0.3
         });
-        
+
         const aiResponse = completion.choices[0].message.content.trim();
-        // 检查是否包含#travel标签
-        const shouldTravel = aiResponse.includes("#travel");
-        // 移除标签
-        const cleanMessage = aiResponse.replace("#travel", "").replace("#other", "").trim();
-        
-        return {
-            message: cleanMessage,
-            shouldTravel: shouldTravel
-        };
+        console.log('Raw AI response:', aiResponse);
+
+        // 尝试解析JSON响应
+        try {
+            const parsedResponse = JSON.parse(aiResponse);
+            console.log('Parsed JSON response:', parsedResponse);
+
+            // 验证响应格式
+            if (typeof parsedResponse.message === 'string' &&
+                typeof parsedResponse.shouldTravel === 'boolean' &&
+                typeof parsedResponse.confidence === 'number') {
+
+                const result = {
+                    message: parsedResponse.message,
+                    shouldTravel: parsedResponse.shouldTravel,
+                    confidence: parsedResponse.confidence
+                };
+                console.log('Valid JSON response:', result);
+                return result;
+            } else {
+                throw new Error('Invalid response format');
+            }
+        } catch (parseError) {
+            console.error('Failed to parse AI response as JSON:', parseError);
+            console.log('Raw AI response:', aiResponse);
+
+            // 如果JSON解析失败，尝试从文本中提取信息
+            const fallbackResponse = extractFallbackResponse(aiResponse);
+            console.log('Fallback response:', fallbackResponse);
+            return fallbackResponse;
+        }
     } catch (error) {
-        console.error('AI分析截图时出错:', error);
+        console.error('Error occurred during AI screenshot analysis:', error);
         // 出错时返回默认响应
         const shouldTravel = Math.random() > 0.5;
         const defaultResponses = [
@@ -88,11 +163,12 @@ async function analyzeScreenshot(base64Image) {
             "这个风景好美，替你去北京看看？",
             "要去北京旅行吗？"
         ];
-        
+
         if (shouldTravel) {
             return {
                 message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
-                shouldTravel: true
+                shouldTravel: true,
+                confidence: 0.5
             };
         } else {
             const nonTravelResponses = [
@@ -102,7 +178,8 @@ async function analyzeScreenshot(base64Image) {
             ];
             return {
                 message: nonTravelResponses[Math.floor(Math.random() * nonTravelResponses.length)],
-                shouldTravel: false
+                shouldTravel: false,
+                confidence: 0.4
             };
         }
     }
@@ -117,7 +194,7 @@ async function generateFunReminder() {
     try {
         // 如果没有配置API Key，则返回默认提醒
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
-            console.log("未配置API Key，返回默认提醒");
+            console.log("API Key not configured, returning default reminder");
             const defaultReminders = [
                 "哇塞这个好好玩！✨",
                 "已加入代办！✅",
@@ -126,25 +203,25 @@ async function generateFunReminder() {
             ];
             return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
         }
-        
+
         const completion = await openai.chat.completions.create({
             model: "qwen-plus",
             messages: [
-                { 
-                    role: "system", 
-                    content: "你是一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字。" 
+                {
+                    role: "system",
+                    content: "你是一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字。"
                 },
-                { 
-                    role: "user", 
-                    content: "给我生成一个有趣的提醒消息" 
+                {
+                    role: "user",
+                    content: "给我生成一个有趣的提醒消息"
                 }
             ],
             max_tokens: 50
         });
-        
+
         return completion.choices[0].message.content.trim();
     } catch (error) {
-        console.error('AI生成提醒时出错:', error);
+        console.error('Error occurred during AI reminder generation:', error);
         // 出错时返回默认提醒
         const defaultReminders = [
             "哇塞这个好好玩！✨",
@@ -165,7 +242,7 @@ async function generateJourneyStatus() {
     try {
         // 如果没有配置API Key，则返回默认状态
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
-            console.log("未配置API Key，返回默认状态");
+            console.log("API Key not configured, returning default status");
             const defaultStatuses = [
                 "正在北京天安门广场看升旗仪式🇨🇳",
                 "在故宫里探索历史文化🏯",
@@ -175,25 +252,25 @@ async function generateJourneyStatus() {
             ];
             return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
         }
-        
+
         const completion = await openai.chat.completions.create({
             model: "qwen-plus",
             messages: [
-                { 
-                    role: "system", 
-                    content: "你是一个有趣的桌面伴侣助手。用户有一个正在旅行的小旅星，你需要描述它当前的状态和位置。保持简短，不超过20个字。" 
+                {
+                    role: "system",
+                    content: "你是一个有趣的桌面伴侣助手。用户有一个正在旅行的小旅星，你需要描述它当前的状态和位置。保持简短，不超过20个字。"
                 },
-                { 
-                    role: "user", 
-                    content: "我的小旅星现在在哪里？在做什么？" 
+                {
+                    role: "user",
+                    content: "我的小旅星现在在哪里？在做什么？"
                 }
             ],
             max_tokens: 50
         });
-        
+
         return completion.choices[0].message.content.trim();
     } catch (error) {
-        console.error('AI生成旅程状态时出错:', error);
+        console.error('Error occurred during AI journey status generation:', error);
         // 出错时返回默认状态
         const defaultStatuses = [
             "正在北京天安门广场看升旗仪式🇨🇳",

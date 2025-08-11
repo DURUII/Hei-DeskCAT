@@ -10,6 +10,85 @@ class AMapService {
   }
 
   /**
+   * 获取用户当前位置（通过IP定位）
+   * @returns {Promise<Object>} 用户位置信息
+   */
+  async getUserLocation() {
+    if (!this.apiKey) {
+      throw new Error('高德地图API Key未配置');
+    }
+
+    try {
+      // 使用高德地图IP定位API获取用户位置
+      const url = `https://restapi.amap.com/v3/ip?key=${this.apiKey}`;
+
+      return this._makeRequest(url);
+    } catch (error) {
+      console.error('Failed to get user location:', error);
+      // 如果IP定位失败，返回默认位置
+      return {
+        status: '1',
+        info: 'OK',
+        infocode: '10000',
+        province: '湖北省',
+        city: '武汉市',
+        adcode: '420100',
+        rectangle: '114.402994,30.505446;114.402994,30.505446'
+      };
+    }
+  }
+
+  /**
+   * 根据IP获取用户详细位置信息
+   * @returns {Promise<Object>} 详细位置信息
+   */
+  async getUserLocationDetails() {
+    try {
+      const locationData = await this.getUserLocation();
+
+      if (locationData.status === '1') {
+        // 解析矩形坐标获取中心点
+        const rectangle = locationData.rectangle;
+        if (rectangle) {
+          const coords = rectangle.split(';');
+          const startCoord = coords[0].split(',');
+          const endCoord = coords[1].split(',');
+
+          // 计算中心点坐标
+          const centerLng = (parseFloat(startCoord[0]) + parseFloat(endCoord[0])) / 2;
+          const centerLat = (parseFloat(startCoord[1]) + parseFloat(endCoord[1])) / 2;
+
+          return {
+            province: locationData.province,
+            city: locationData.city,
+            adcode: locationData.adcode,
+            location: `${centerLng},${centerLat}`,
+            coordinates: [centerLng, centerLat]
+          };
+        }
+      }
+
+      // 如果解析失败，返回默认位置
+      return {
+        province: '湖北省',
+        city: '武汉市',
+        adcode: '420100',
+        location: '114.402994,30.505446',
+        coordinates: [114.402994, 30.505446]
+      };
+    } catch (error) {
+      console.error('Failed to get detailed user location:', error);
+      return {
+        province: '湖北省',
+        city: '武汉市',
+        adcode: '420100',
+        location: '114.402994,30.505446',
+        coordinates: [114.402994, 30.505446]
+      };
+    }
+  }
+
+  /**
    * 驾车路径规划
    * @param {Object} params - 路径规划参数
    * @param {string} params.origin - 出发点经纬度 (格式: "经度,纬度")
@@ -37,7 +116,7 @@ class AMapService {
     });
 
     const url = `https://restapi.amap.com/v3/direction/driving?${queryParams.toString()}`;
-    
+
     return this._makeRequest(url);
   }
 
@@ -69,8 +148,8 @@ class AMapService {
     });
 
     const url = `https://restapi.amap.com/v3/direction/transit/integrated?${queryParams.toString()}`;
-    
-    console.log('公交路径规划请求URL:', url);
+
+    console.log('Transit route planning request URL:', url);
     return this._makeRequest(url);
   }
 
@@ -101,7 +180,7 @@ class AMapService {
     });
 
     const url = `https://restapi.amap.com/v3/place/text?${queryParams.toString()}`;
-    
+
     return this._makeRequest(url);
   }
 
@@ -129,7 +208,7 @@ class AMapService {
     });
 
     const url = `https://restapi.amap.com/v3/weather/weatherInfo?${queryParams.toString()}`;
-    
+
     return this._makeRequest(url);
   }
 
@@ -186,8 +265,8 @@ class AMapService {
     });
 
     const url = `https://restapi.amap.com/v3/geocode/geo?${queryParams.toString()}`;
-    
-    console.log('地理编码请求URL:', url);
+
+    console.log('Geocoding request URL:', url);
     return this._makeRequest(url);
   }
 
@@ -215,7 +294,7 @@ class AMapService {
     });
 
     const url = `https://restapi.amap.com/v3/geocode/regeo?${queryParams.toString()}`;
-    
+
     return this._makeRequest(url);
   }
 
@@ -229,27 +308,27 @@ class AMapService {
     return new Promise((resolve, reject) => {
       https.get(url, (res) => {
         let data = '';
-        
+
         res.on('data', (chunk) => {
           data += chunk;
         });
-        
+
         res.on('end', () => {
           try {
-            console.log('高德地图API响应数据:', data);
+            console.log('AMap API response data:', data);
             const result = JSON.parse(data);
             if (result.status === '1') {
               resolve(result);
             } else {
-              reject(new Error(result.info || '请求失败'));
+              reject(new Error(result.info || 'Request failed'));
             }
           } catch (error) {
-            console.error('解析响应数据失败:', error, '原始数据:', data);
-            reject(new Error('解析响应数据失败'));
+            console.error('Failed to parse response data:', error, 'Raw data:', data);
+            reject(new Error('Failed to parse response data'));
           }
         });
       }).on('error', (error) => {
-        console.error('HTTP请求失败:', error);
+        console.error('HTTP request failed:', error);
         reject(error);
       });
     });

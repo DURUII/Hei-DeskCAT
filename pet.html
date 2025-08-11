@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <title>DeskPet</title>
@@ -13,65 +14,46 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
-            -webkit-app-region: drag; /* 添加拖动区域 */
+            -webkit-app-region: drag;
+            /* 添加拖动区域 */
         }
-        
+
         .pet-container {
             cursor: pointer;
             transition: all 0.2s ease;
-            -webkit-app-region: no-drag; /* 点击区域不拖动 */
+            -webkit-app-region: no-drag;
+            /* 点击区域不拖动 */
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 80px;
+            height: 80px;
         }
-        
+
         .pet-container:hover {
             transform: scale(1.1);
         }
-        
+
         .pet-container:active {
             transform: scale(0.95);
         }
-        
-        .pet-svg {
+
+        .pet-image {
             width: 80px;
             height: 80px;
             filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+            border-radius: 50%;
+            object-fit: cover;
+            pointer-events: none;
+            /* 确保点击事件传递给父容器 */
+            user-select: none;
+            /* 防止图片被选中 */
         }
-        
-        .status-popup {
-            position: absolute;
-            bottom: 90px;
-            background: white;
-            border-radius: 15px;
-            padding: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            border: 1px solid #eee;
-            width: 200px;
-            text-align: center;
-            display: none;
-            animation: fadeIn 0.3s;
-            -webkit-app-region: no-drag;
-        }
-        
-        .status-popup.show {
-            display: block;
-        }
-        
-        .status-title {
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        
-        .status-message {
-            font-size: 14px;
-            color: #666;
-            margin: 5px 0;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
+
+
+
         /* 拖动手柄 */
         .drag-handle {
             position: absolute;
@@ -81,79 +63,50 @@
             height: 20px;
             -webkit-app-region: drag;
             cursor: move;
+            z-index: 1;
         }
     </style>
 </head>
+
 <body>
     <div class="drag-handle" id="dragHandle"></div>
     <div class="pet-container" id="pet">
-        <svg class="pet-svg" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-            <circle cx="35" cy="40" r="5" fill="#333" />
-            <circle cx="65" cy="40" r="5" fill="#333" />
-            <path d="M 30 65 Q 50 80 70 65" stroke="#333" stroke-width="3" fill="none" />
-        </svg>
-        
-        <div class="status-popup" id="statusPopup">
-            <div class="status-title">小旅星状态</div>
-            <div class="status-message" id="statusMessage">正在冰岛看极光✨</div>
-            <div class="status-message">预计还有15小时到达</div>
-        </div>
+        <img class="pet-image" src="images/pet.gif" alt="桌宠" />
     </div>
-    
+
+
+
     <script>
         const pet = document.getElementById('pet');
-        const statusPopup = document.getElementById('statusPopup');
-        const statusMessage = document.getElementById('statusMessage');
         const dragHandle = document.getElementById('dragHandle');
-        
-        // 宠物随机动作
-        const petSVG = pet.querySelector('.pet-svg');
-        setInterval(() => {
-            const expressions = [
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="35" cy="40" r="5" fill="#333" />
-                <circle cx="65" cy="40" r="5" fill="#333" />
-                <path d="M 30 65 Q 50 80 70 65" stroke="#333" stroke-width="3" fill="none" />`,
-                
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="35" cy="40" r="5" fill="#333" />
-                <circle cx="65" cy="40" r="5" fill="#333" />
-                <path d="M 30 70 Q 50 60 70 70" stroke="#333" stroke-width="3" fill="none" />`,
-                
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="30" cy="40" r="5" fill="#333" />
-                <circle cx="70" cy="40" r="5" fill="#333" />
-                <circle cx="50" cy="60" r="8" fill="#333" />`,
-                
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="35" cy="35" r="5" fill="#333" />
-                <circle cx="65" cy="35" r="5" fill="#333" />
-                <path d="M 40 70 Q 50 65 60 70" stroke="#333" stroke-width="3" fill="none" />`
-            ];
-            
-            petSVG.innerHTML = expressions[Math.floor(Math.random() * expressions.length)];
-        }, 3000);
-        
-        // 点击宠物显示状态
-        pet.addEventListener('click', () => {
-            // 随机显示不同状态消息
-            const messages = [
-                '正在冰岛看极光✨',
-                '在挪威森林里探险🌲',
-                '于撒哈拉沙漠看星星🌟',
-                '在日本樱花树下喝茶🌸',
-                '在瑞士阿尔卑斯山滑雪⛷️'
-            ];
-            
-            statusMessage.textContent = messages[Math.floor(Math.random() * messages.length)];
-            statusPopup.classList.add('show');
-            
-            // 3秒后隐藏
-            setTimeout(() => {
-                statusPopup.classList.remove('show');
-            }, 3000);
+
+        // 右键菜单功能
+        let contextMenuTimeout = null;
+        pet.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // 防抖：清除之前的超时
+            if (contextMenuTimeout) {
+                clearTimeout(contextMenuTimeout);
+            }
+
+            // 延迟发送，避免快速连续点击
+            contextMenuTimeout = setTimeout(() => {
+                try {
+                    console.log('Sending context menu request');
+                    require('electron').ipcRenderer.send('show-context-menu', e.screenX, e.screenY);
+                } catch (error) {
+                    console.error('Error showing context menu:', error);
+                }
+            }, 50);
         });
+
+        // 宠物动画已通过GIF实现，无需代码控制
+        console.log('Pet animation loaded from GIF file');
+
+
     </script>
 </body>
+
 </html>

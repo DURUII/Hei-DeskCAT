@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <title>云旅行地图</title>
@@ -10,14 +11,14 @@
             background: white;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             overflow: hidden;
-            width: 300px;
-            height: 200px;
+            width: 100vw;
+            height: 100vh;
             border-radius: 10px;
             border: 1px solid #eee;
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
             -webkit-app-region: drag;
         }
-        
+
         .map-container {
             width: 100%;
             height: 100%;
@@ -26,7 +27,77 @@
             border-radius: 10px;
             overflow: hidden;
         }
-        
+
+        #amap-container {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        /* 确保地图能够正确适应容器大小 */
+        #amap-container .amap-container {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .map-controls {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            -webkit-app-region: no-drag;
+        }
+
+        .zoom-control {
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .zoom-control:hover {
+            background: rgba(255, 255, 255, 1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .zoom-control:active {
+            transform: scale(0.95);
+        }
+
+
+
+        .location-info {
+            position: absolute;
+            bottom: 50px;
+            left: 10px;
+            z-index: 15;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            max-width: 200px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            -webkit-app-region: no-drag;
+        }
+
+        .location-info .current {
+            color: #4a6cf7;
+            font-weight: bold;
+        }
+
         .header {
             position: absolute;
             top: 10px;
@@ -42,7 +113,7 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             -webkit-app-region: no-drag;
         }
-        
+
         .traveler {
             position: absolute;
             transition: all 2s linear;
@@ -51,15 +122,34 @@
             height: 30px;
             -webkit-app-region: no-drag;
         }
-        
+
         .destination {
             position: absolute;
             right: 20px;
             bottom: 30px;
             font-size: 24px;
             -webkit-app-region: no-drag;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            animation: pulse 2s infinite;
         }
-        
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
         .weather {
             position: absolute;
             top: 10px;
@@ -75,7 +165,7 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             -webkit-app-region: no-drag;
         }
-        
+
         .progress-bar {
             position: absolute;
             bottom: 10px;
@@ -87,7 +177,7 @@
             overflow: hidden;
             -webkit-app-region: no-drag;
         }
-        
+
         .progress {
             height: 100%;
             background: #4a6cf7;
@@ -95,7 +185,7 @@
             border-radius: 3px;
             transition: width 1s linear;
         }
-        
+
         .status-text {
             position: absolute;
             bottom: 20px;
@@ -104,7 +194,7 @@
             color: #333;
             -webkit-app-region: no-drag;
         }
-        
+
         .close-btn {
             position: absolute;
             top: 5px;
@@ -122,18 +212,18 @@
             border-radius: 50%;
             -webkit-app-region: no-drag;
         }
-        
+
         .close-btn:hover {
             background: #f0f0f0;
         }
-        
+
         /* 高德地图容器 */
         #amap-container {
             width: 100%;
             height: 100%;
             position: relative;
         }
-        
+
         /* 拖动手柄 */
         .drag-handle {
             position: absolute;
@@ -144,7 +234,7 @@
             -webkit-app-region: drag;
             cursor: move;
         }
-        
+
         /* 加载提示 */
         .loading {
             display: flex;
@@ -155,7 +245,7 @@
             font-size: 14px;
             color: #666;
         }
-        
+
         .debug-info {
             font-size: 10px;
             color: #999;
@@ -165,19 +255,37 @@
         }
     </style>
 </head>
+
 <body>
     <div class="drag-handle" id="dragHandle"></div>
-    
+
     <div class="map-container">
         <button class="close-btn" id="closeBtn">×</button>
-        
+
         <div class="header">
             <span id="time-icon">🌞</span>
             <span id="route-info">武汉 → 北京</span>
         </div>
-        
+
         <div class="weather" id="weather">❄️</div>
-        
+
+        <!-- 缩放控件 -->
+        <div class="map-controls">
+            <div class="zoom-control" id="zoom-in" title="放大">+</div>
+            <div class="zoom-control" id="zoom-out" title="缩小">−</div>
+            <div class="zoom-control" id="reset-view" title="重置视野">⌂</div>
+            <div class="zoom-control" id="debug-state" title="调试状态" style="background: #ff6b6b;">🐛</div>
+            <div class="zoom-control" id="test-marker" title="测试标记" style="background: #4CAF50;">🧪</div>
+        </div>
+
+
+
+        <!-- 位置信息 -->
+        <div class="location-info" id="location-info">
+            <div><span class="current">出发地</span>: <span id="current-location">加载中...</span></div>
+            <div><span class="current">目的地</span>: <span id="dest-location">加载中...</span></div>
+        </div>
+
         <!-- 高德地图容器 -->
         <div id="amap-container">
             <div class="loading">
@@ -185,18 +293,18 @@
                 <div class="debug-info" id="debug-info"></div>
             </div>
         </div>
-        
+
         <div class="destination">🏯</div>
-        
+
         <div class="progress-bar">
             <div class="progress" id="progress"></div>
         </div>
-        
+
         <div class="status-text" id="status-text">
             预计11小时后抵达，每小时寄回一张照片
         </div>
     </div>
-    
+
     <script>
         const closeBtn = document.getElementById('closeBtn');
         const progress = document.getElementById('progress');
@@ -207,45 +315,134 @@
         const statusText = document.getElementById('status-text');
         const amapContainer = document.getElementById('amap-container');
         const debugInfo = document.getElementById('debug-info');
-        
+        const currentLocation = document.getElementById('current-location');
+        const destLocation = document.getElementById('dest-location');
+        const zoomIn = document.getElementById('zoom-in');
+        const zoomOut = document.getElementById('zoom-out');
+        const resetView = document.getElementById('reset-view');
+        const debugState = document.getElementById('debug-state');
+        const testMarker = document.getElementById('test-marker');
+
+
+        // 全局变量存储地图实例和位置信息
+        let mapInstance = null;
+        let originCoords = null;
+        let destCoords = null;
+        let travelData = null;
+
+        // 旅行动画相关变量
+        let travelerMarker = null;
+        let routePath = [];
+        let currentPathIndex = 0;
+        let travelAnimation = null;
+        let isTraveling = false;
+        let travelSpeed = 200; // 移动间隔（毫秒）- 调整为更慢的速度便于观察
+        let totalDistance = 0;
+        let traveledDistance = 0;
+
         closeBtn.addEventListener('click', () => {
             window.close();
         });
-        
+
+        // 缩放控件事件监听
+        zoomIn.addEventListener('click', () => {
+            if (mapInstance) {
+                const currentZoom = mapInstance.getZoom();
+                mapInstance.setZoom(currentZoom + 1);
+            }
+        });
+
+        zoomOut.addEventListener('click', () => {
+            if (mapInstance) {
+                const currentZoom = mapInstance.getZoom();
+                mapInstance.setZoom(currentZoom - 1);
+            }
+        });
+
+        resetView.addEventListener('click', () => {
+            if (mapInstance && window.originCoords && window.destCoords) {
+                // 重置到显示起点和终点的视野
+                const bounds = new AMap.Bounds(
+                    new AMap.LngLat(Math.min(window.originCoords[0], window.destCoords[0]), Math.min(window.originCoords[1], window.destCoords[1])),
+                    new AMap.LngLat(Math.max(window.originCoords[0], window.destCoords[0]), Math.max(window.originCoords[1], window.destCoords[1]))
+                );
+                mapInstance.setBounds(bounds, true, [20, 20, 20, 20]);
+            }
+        });
+
+        // 调试按钮事件监听
+        debugState.addEventListener('click', () => {
+            window.debugTravelState();
+            debugInfo.textContent = '调试信息已输出到控制台';
+        });
+
+        // 测试标记按钮事件监听
+        testMarker.addEventListener('click', () => {
+            window.testTravelerMarker();
+            debugInfo.textContent = '测试标记已创建，3秒后自动移除';
+        });
+
+
+
         // 根据时间切换日/夜图标
         const hour = new Date().getHours();
         if (hour >= 18 || hour < 6) {
             timeIcon.textContent = '🌙';
         }
-        
+
+        // 监听窗口大小变化，调整地图大小
+        window.addEventListener('resize', () => {
+            if (mapInstance) {
+                // 延迟执行以确保DOM更新完成
+                setTimeout(() => {
+                    mapInstance.resize();
+
+                    // 如果有起点和终点坐标，重新调整视野
+                    if (window.originCoords && window.destCoords) {
+                        const bounds = new AMap.Bounds(
+                            new AMap.LngLat(Math.min(window.originCoords[0], window.destCoords[0]), Math.min(window.originCoords[1], window.destCoords[1])),
+                            new AMap.LngLat(Math.max(window.originCoords[0], window.destCoords[0]), Math.max(window.originCoords[1], window.destCoords[1]))
+                        );
+                        mapInstance.setBounds(bounds, true, [20, 20, 20, 20]);
+                    }
+                }, 100);
+            }
+        });
+
         // 从主进程获取旅行信息
         const ipcRenderer = require('electron').ipcRenderer;
         let AMAP_KEY = '';
-        
+
         // 监听主进程发送的旅行信息
         ipcRenderer.on('travel-info', async (event, data) => {
-            console.log('接收到旅行信息:', data);
+            console.log('Received travel info:', data);
             debugInfo.textContent = `接收到旅行信息: ${JSON.stringify(data)}`;
-            
+
             // 更新界面信息
             if (data.origin && data.destination) {
                 routeInfo.textContent = `${data.origin} → ${data.destination}`;
+                currentLocation.textContent = data.origin;
+                destLocation.textContent = data.destination;
             }
-            
+
+            // 保存旅行数据
+            travelData = data;
+
             // 初始化高德地图
             await initMap(data);
         });
-        
+
         // 初始化高德地图
         async function initMap(travelData) {
             debugInfo.textContent = '检查API Key配置...';
-            
+            console.log(travelData);
+
             // 从主进程获取API Key
             AMAP_KEY = window.AMAP_KEY || '';
-            
+
             // 检查API Key是否存在
             if (!AMAP_KEY || AMAP_KEY === 'undefined') {
-                console.error('高德地图API Key未配置');
+                console.error('AMap API Key not configured');
                 debugInfo.textContent = '错误: API Key未配置，请在.env文件中设置AMAP_KEY';
                 amapContainer.innerHTML = `
                     <div class="loading">
@@ -255,31 +452,44 @@
                 `;
                 return;
             }
-            
+
             debugInfo.textContent = `API Key存在，开始地理编码: ${AMAP_KEY.substring(0, 10)}...`;
-            
+
             try {
                 // 获取始发地和目的地的经纬度
-                debugInfo.textContent = '获取始发地坐标...';
-                const originCoords = await geocodeAddress(travelData.origin || '武汉光谷');
-                debugInfo.textContent = `始发地坐标获取成功: ${originCoords}`;
-                console.log('始发地坐标:', originCoords);
-                
+                let originCoords;
+
+                // 如果有用户位置信息，优先使用
+                if (travelData.userLocation && travelData.userLocation.coordinates) {
+                    debugInfo.textContent = '使用用户位置作为起点...';
+                    originCoords = travelData.userLocation.coordinates;
+                    console.log('Using user location as origin:', originCoords);
+                } else {
+                    debugInfo.textContent = '获取始发地坐标...';
+                    originCoords = await geocodeAddress(travelData.origin || '武汉光谷');
+                    debugInfo.textContent = `始发地坐标获取成功: ${originCoords}`;
+                    console.log('Origin coordinates:', originCoords);
+                }
+
                 debugInfo.textContent = '获取目的地坐标...';
                 const destCoords = await geocodeAddress(travelData.destination || '北京天安门');
                 debugInfo.textContent = `目的地坐标获取成功: ${destCoords}`;
-                console.log('目的地坐标:', destCoords);
-                
+                console.log('Destination coordinates:', destCoords);
+
+                // 保存坐标到全局变量
+                window.originCoords = originCoords;
+                window.destCoords = destCoords;
+
                 // 加载高德地图JS API
                 debugInfo.textContent = '加载高德地图JS API...';
                 await loadAMapAPI();
-                
+
                 // 创建地图并绘制路线
                 debugInfo.textContent = '创建地图实例...';
                 createMap(originCoords, destCoords, travelData);
             } catch (error) {
                 debugInfo.textContent = `地图初始化错误: ${error.message}`;
-                console.error('地图初始化错误:', error);
+                console.error('Map initialization error:', error);
                 // 记录错误到日志文件
                 logErrorToFile(`地图初始化错误: ${error.message}\n堆栈信息: ${error.stack}`);
                 amapContainer.innerHTML = `
@@ -290,31 +500,31 @@
                 `;
             }
         }
-        
+
         // 加载高德地图JS API
         function loadAMapAPI() {
             return new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = `https://webapi.amap.com/maps?v=1.4.15&key=${AMAP_KEY}`;
-                
-                script.onload = function() {
+
+                script.onload = function () {
                     debugInfo.textContent = '高德地图API加载成功';
-                    console.log('高德地图API加载成功');
+                    console.log('AMap API loaded successfully');
                     resolve();
                 };
-                
-                script.onerror = function(error) {
+
+                script.onerror = function (error) {
                     debugInfo.textContent = `高德地图API加载失败: ${error.message}`;
-                    console.error('高德地图API加载失败:', error);
+                    console.error('AMap API loading failed:', error);
                     // 记录错误到日志文件
                     logErrorToFile(`高德地图API加载失败: ${error.message}`);
                     reject(new Error('高德地图API加载失败'));
                 };
-                
+
                 document.head.appendChild(script);
             });
         }
-        
+
         // 创建地图并绘制路线
         function createMap(originCoords, destCoords, travelData) {
             try {
@@ -327,106 +537,385 @@
                     logErrorToFile(errorMsg);
                     throw new Error(errorMsg);
                 }
-                
+
+                // 确保坐标格式正确
+                const originLngLat = Array.isArray(originCoords)
+                    ? new AMap.LngLat(originCoords[0], originCoords[1])
+                    : originCoords;
+
                 // 创建地图实例
                 const map = new AMap.Map('amap-container', {
-                    zoom: 4,
-                    center: originCoords,
-                    mapStyle: 'amap://styles/normal'
+                    zoom: 12, // 更高的缩放级别，显示更详细的局部区域
+                    center: originLngLat,
+                    mapStyle: 'amap://styles/normal',
+                    showIndoorMap: false, // 不显示室内地图
+                    dragEnable: true, // 允许拖拽
+                    zoomEnable: true, // 允许缩放
+                    doubleClickZoom: true, // 允许双击缩放
+                    scrollWheel: true // 允许滚轮缩放
                 });
-                
+
+                // 保存地图实例到全局变量
+                mapInstance = map;
+
+                // 添加地图事件监听
+                map.on('zoomend', () => {
+                    const zoom = map.getZoom();
+                    debugInfo.textContent = `地图缩放级别: ${zoom}`;
+                });
+
+                map.on('moveend', () => {
+                    const center = map.getCenter();
+                    debugInfo.textContent = `地图中心: ${center.lng.toFixed(4)}, ${center.lat.toFixed(4)}`;
+                });
+
+                // 添加点击事件，允许用户点击地图重新定位
+                map.on('click', (e) => {
+                    const lnglat = e.lnglat;
+                    debugInfo.textContent = `点击位置: ${lnglat.lng.toFixed(4)}, ${lnglat.lat.toFixed(4)}`;
+
+                    // 可以在这里添加反向地理编码，获取点击位置的地址信息
+                    // 暂时只显示坐标信息
+                });
+
+                // 地图加载完成后调整大小
+                map.on('complete', () => {
+                    setTimeout(() => {
+                        map.resize();
+                    }, 100);
+                });
+
                 debugInfo.textContent = '地图实例创建成功';
-                console.log('地图实例创建成功');
-                
+                console.log('Map instance created successfully');
+
                 // 使用高德地图WebService API获取驾车路线数据
                 debugInfo.textContent = '获取驾车路线数据...';
+                console.log('Starting route request with:', {
+                    originCoords: originCoords,
+                    destCoords: destCoords,
+                    AMAP_KEY: AMAP_KEY ? 'Configured' : 'Not configured'
+                });
+
                 getDrivingRoute(originCoords, destCoords)
                     .then(routeData => {
                         debugInfo.textContent = '驾车路线数据获取成功';
-                        console.log('驾车路线数据:', routeData);
-                        
+                        console.log('Driving route data:', routeData);
+
                         // 清除加载提示
                         amapContainer.querySelector('.loading')?.remove();
-                        
-                        if (routeData.status === '1' && routeData.route) {
+
+                        if (routeData.status === '1' && routeData.route && routeData.route.paths && routeData.route.paths.length > 0) {
                             debugInfo.textContent = '路线规划成功，绘制路线...';
-                            console.log('路线规划成功');
-                            
-                            // 解析路线数据
-                            const paths = routeData.route.paths[0];
-                            const steps = paths.steps;
-                            
-                            // 构建路线坐标点数组
-                            let routePath = [];
-                            steps.forEach(step => {
-                                const polyline = step.polyline;
-                                if (polyline) {
-                                    const points = polyline.split(';').map(point => {
-                                        const [lng, lat] = point.split(',').map(Number);
-                                        return new AMap.LngLat(lng, lat);
+                            console.log('Route planning successful');
+
+                            try {
+                                // 解析路线数据
+                                const paths = routeData.route.paths[0];
+                                if (paths && paths.steps && paths.steps.length > 0) {
+                                    const steps = paths.steps;
+
+                                    // 构建路线坐标点数组
+                                    let routePath = [];
+                                    steps.forEach(step => {
+                                        const polyline = step.polyline;
+                                        if (polyline) {
+                                            const points = polyline.split(';').map(point => {
+                                                const [lng, lat] = point.split(',').map(Number);
+                                                return new AMap.LngLat(lng, lat);
+                                            });
+                                            routePath = routePath.concat(points);
+                                        }
                                     });
-                                    routePath = routePath.concat(points);
+
+                                    // 保存路线到全局变量
+                                    window.routePath = routePath;
+                                    window.currentPathIndex = 0;
+
+                                    console.log('Route path saved to window.routePath:', {
+                                        length: routePath.length,
+                                        firstPoint: routePath[0],
+                                        lastPoint: routePath[routePath.length - 1]
+                                    });
+
+                                    // 如果有路线点，创建路线覆盖物
+                                    if (routePath.length > 0) {
+                                        const polyline = new AMap.Polyline({
+                                            path: routePath,
+                                            strokeColor: "#3366FF",
+                                            strokeWeight: 6,
+                                            strokeOpacity: 0.8
+                                        });
+
+                                        map.add(polyline);
+                                        debugInfo.textContent = `路线绘制成功，共${routePath.length}个坐标点`;
+
+                                        // 创建旅行者标记
+                                        createTravelerMarker();
+                                    } else {
+                                        debugInfo.textContent = '路线点数据为空，跳过路线绘制';
+                                    }
+                                } else {
+                                    debugInfo.textContent = '路线步骤数据为空，跳过路线绘制';
                                 }
-                            });
-                            
-                            // 创建路线覆盖物
-                            const polyline = new AMap.Polyline({
-                                path: routePath,
-                                strokeColor: "#3366FF",
-                                strokeWeight: 6,
-                                strokeOpacity: 0.8
-                            });
-                            
-                            map.add(polyline);
-                            
-                            // 调整地图视野以适应路线
-                            map.setFitView([polyline]);
-                            
+                            } catch (error) {
+                                debugInfo.textContent = `路线数据处理错误: ${error.message}`;
+                                console.error('Route data processing error:', error);
+                            }
+
+                            // 调整地图视野以适应路线，但优先显示起点附近
+                            const bounds = new AMap.Bounds(
+                                new AMap.LngLat(Math.min(originCoords[0], destCoords[0]), Math.min(originCoords[1], destCoords[1])),
+                                new AMap.LngLat(Math.max(originCoords[0], destCoords[0]), Math.max(originCoords[1], destCoords[1]))
+                            );
+
+                            // 如果起点和终点距离较远，优先显示起点附近
+                            const distance = Math.sqrt(
+                                Math.pow(originCoords[0] - destCoords[0], 2) +
+                                Math.pow(originCoords[1] - destCoords[1], 2)
+                            );
+
+                            if (distance > 0.1) { // 如果距离较远（约10公里以上）
+                                // 显示起点附近的详细视图
+                                map.setCenter(new AMap.LngLat(originCoords[0], originCoords[1]));
+                                map.setZoom(14); // 更高的缩放级别显示局部详情
+
+                                // 添加一个小的延迟，然后显示完整路线预览
+                                setTimeout(() => {
+                                    map.setBounds(bounds, true, [20, 20, 20, 20]);
+                                }, 2000);
+                            } else {
+                                // 距离较近时显示完整路线
+                                map.setBounds(bounds, true, [20, 20, 20, 20]);
+                            }
+
                             // 添加起点和终点标记
                             const startMarker = new AMap.Marker({
-                                position: originCoords,
-                                title: travelData.origin || '武汉光谷'
+                                position: Array.isArray(originCoords)
+                                    ? new AMap.LngLat(originCoords[0], originCoords[1])
+                                    : originCoords,
+                                title: travelData.origin || '当前位置',
+                                icon: new AMap.Icon({
+                                    size: new AMap.Size(32, 32),
+                                    image: 'data:image/svg+xml;base64,' + btoa(`
+                                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="16" cy="16" r="12" fill="#4a6cf7" stroke="white" stroke-width="2"/>
+                                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">S</text>
+                                        </svg>
+                                    `)
+                                }),
+                                offset: new AMap.Pixel(-16, -16)
                             });
-                            
+
                             const endMarker = new AMap.Marker({
-                                position: destCoords,
-                                title: travelData.destination || '北京天安门'
+                                position: Array.isArray(destCoords)
+                                    ? new AMap.LngLat(destCoords[0], destCoords[1])
+                                    : destCoords,
+                                title: travelData.destination || '北京天安门',
+                                icon: new AMap.Icon({
+                                    size: new AMap.Size(32, 32),
+                                    image: 'data:image/svg+xml;base64,' + btoa(`
+                                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="16" cy="16" r="12" fill="#ff6b6b" stroke="white" stroke-width="2"/>
+                                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">E</text>
+                                        </svg>
+                                    `)
+                                }),
+                                offset: new AMap.Pixel(-16, -16)
                             });
-                            
+
+                            // 添加标记点击事件
+                            startMarker.on('click', () => {
+                                debugInfo.textContent = `起点: ${travelData.origin}`;
+                            });
+
+                            endMarker.on('click', () => {
+                                debugInfo.textContent = `终点: ${travelData.destination}`;
+                                // 点击终点时，将地图中心移动到终点
+                                map.setCenter(endMarker.getPosition());
+                                map.setZoom(16);
+                            });
+
                             map.add([startMarker, endMarker]);
-                            
-                            debugInfo.textContent = '地图绘制完成';
-                            console.log('地图绘制完成');
+
+                            debugInfo.textContent = '地图绘制完成，准备开始旅行动画';
+                            console.log('Map drawing completed, starting travel animation');
+
+                            // 延迟2秒后自动开始旅行动画
+                            setTimeout(() => {
+                                startTravelAnimation();
+                            }, 2000);
                         } else {
                             const errorMsg = `路线规划失败: ${JSON.stringify(routeData)}`;
                             debugInfo.textContent = errorMsg;
-                            console.log('获取路线失败：', routeData);
+                            console.log('Failed to get route:', routeData);
                             // 记录错误到日志文件
                             logErrorToFile(errorMsg);
-                            amapContainer.innerHTML = `
-                                <div class="loading">
-                                    <div>路线加载失败</div>
-                                    <div class="debug-info">错误信息: ${JSON.stringify(routeData)}</div>
-                                </div>
-                            `;
+
+                            // 即使路线规划失败，也显示起点和终点标记
+                            const startMarker = new AMap.Marker({
+                                position: Array.isArray(originCoords)
+                                    ? new AMap.LngLat(originCoords[0], originCoords[1])
+                                    : originCoords,
+                                title: travelData.origin || '当前位置',
+                                icon: new AMap.Icon({
+                                    size: new AMap.Size(32, 32),
+                                    image: 'data:image/svg+xml;base64,' + btoa(`
+                                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="16" cy="16" r="12" fill="#4a6cf7" stroke="white" stroke-width="2"/>
+                                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">S</text>
+                                        </svg>
+                                    `)
+                                }),
+                                offset: new AMap.Pixel(-16, -16)
+                            });
+
+                            const endMarker = new AMap.Marker({
+                                position: Array.isArray(destCoords)
+                                    ? new AMap.LngLat(destCoords[0], destCoords[1])
+                                    : destCoords,
+                                title: travelData.destination || '北京天安门',
+                                icon: new AMap.Icon({
+                                    size: new AMap.Size(32, 32),
+                                    image: 'data:image/svg+xml;base64,' + btoa(`
+                                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="16" cy="16" r="12" fill="#ff6b6b" stroke="white" stroke-width="2"/>
+                                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">E</text>
+                                        </svg>
+                                    `)
+                                }),
+                                offset: new AMap.Pixel(-16, -16)
+                            });
+
+                            map.add([startMarker, endMarker]);
+
+                            // 调整视野以显示两个标记
+                            const bounds = new AMap.Bounds(
+                                new AMap.LngLat(Math.min(originCoords[0], destCoords[0]), Math.min(originCoords[1], destCoords[1])),
+                                new AMap.LngLat(Math.max(originCoords[0], destCoords[0]), Math.max(originCoords[1], destCoords[1]))
+                            );
+                            map.setBounds(bounds, true, [20, 20, 20, 20]);
+
+                            debugInfo.textContent = '路线规划失败，但已显示起点和终点标记';
+
+                            // 添加一条直线连接起点和终点
+                            try {
+                                const directPath = [
+                                    new AMap.LngLat(originCoords[0], originCoords[1]),
+                                    new AMap.LngLat(destCoords[0], destCoords[1])
+                                ];
+
+                                const directLine = new AMap.Polyline({
+                                    path: directPath,
+                                    strokeColor: "#FF6B6B",
+                                    strokeWeight: 3,
+                                    strokeOpacity: 0.6,
+                                    strokeStyle: "dashed"
+                                });
+
+                                map.add(directLine);
+
+                                // 创建简化的路线用于动画（在起点和终点之间插值）
+                                const simplifiedPath = createSimplifiedPath(originCoords, destCoords, 50);
+                                window.routePath = simplifiedPath;
+                                window.currentPathIndex = 0;
+
+                                console.log('Simplified path saved to window.routePath:', {
+                                    length: simplifiedPath.length,
+                                    firstPoint: simplifiedPath[0],
+                                    lastPoint: simplifiedPath[simplifiedPath.length - 1]
+                                });
+
+                                // 创建旅行者标记
+                                createTravelerMarker();
+
+                                debugInfo.textContent = '已显示直线连接起点和终点，准备开始简化旅行动画';
+
+                                // 延迟2秒后自动开始简化旅行动画
+                                setTimeout(() => {
+                                    startTravelAnimation();
+                                }, 2000);
+                            } catch (error) {
+                                console.error('Failed to create direct line:', error);
+                            }
                         }
                     })
                     .catch(error => {
                         debugInfo.textContent = `获取路线数据失败: ${error.message}`;
-                        console.error('获取路线数据失败:', error);
+                        console.error('Failed to get route data:', error);
                         // 记录错误到日志文件
                         logErrorToFile(`获取路线数据失败: ${error.message}\n堆栈信息: ${error.stack}`);
-                        amapContainer.innerHTML = `
-                            <div class="loading">
-                                <div>路线加载失败</div>
-                                <div class="debug-info">错误信息: ${error.message}</div>
-                            </div>
-                        `;
+
+                        // 即使路线加载失败，也显示起点和终点标记
+                        try {
+                            const startMarker = new AMap.Marker({
+                                position: Array.isArray(originCoords)
+                                    ? new AMap.LngLat(originCoords[0], originCoords[1])
+                                    : originCoords,
+                                title: travelData.origin || '当前位置',
+                                icon: new AMap.Icon({
+                                    size: new AMap.Size(32, 32),
+                                    image: 'data:image/svg+xml;base64,' + btoa(`
+                                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="16" cy="16" r="12" fill="#4a6cf7" stroke="white" stroke-width="2"/>
+                                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">S</text>
+                                        </svg>
+                                    `)
+                                }),
+                                offset: new AMap.Pixel(-16, -16)
+                            });
+
+                            const endMarker = new AMap.Marker({
+                                position: Array.isArray(destCoords)
+                                    ? new AMap.LngLat(destCoords[0], destCoords[1])
+                                    : destCoords,
+                                title: travelData.destination || '北京天安门',
+                                icon: new AMap.Icon({
+                                    size: new AMap.Size(32, 32),
+                                    image: 'data:image/svg+xml;base64,' + btoa(`
+                                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="16" cy="16" r="12" fill="#ff6b6b" stroke="white" stroke-width="2"/>
+                                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">E</text>
+                                        </svg>
+                                    `)
+                                }),
+                                offset: new AMap.Pixel(-16, -16)
+                            });
+
+                            map.add([startMarker, endMarker]);
+
+                            // 添加一条直线连接起点和终点
+                            const directPath = [
+                                new AMap.LngLat(originCoords[0], originCoords[1]),
+                                new AMap.LngLat(destCoords[0], destCoords[1])
+                            ];
+
+                            const directLine = new AMap.Polyline({
+                                path: directPath,
+                                strokeColor: "#FF6B6B",
+                                strokeWeight: 3,
+                                strokeOpacity: 0.6,
+                                strokeStyle: "dashed"
+                            });
+
+                            map.add(directLine);
+
+                            // 调整视野以显示两个标记
+                            const bounds = new AMap.Bounds(
+                                new AMap.LngLat(Math.min(originCoords[0], destCoords[0]), Math.min(originCoords[1], destCoords[1])),
+                                new AMap.LngLat(Math.max(originCoords[0], destCoords[0]), Math.max(originCoords[1], destCoords[1]))
+                            );
+                            map.setBounds(bounds, true, [20, 20, 20, 20]);
+
+                            debugInfo.textContent = '路线加载失败，但已显示起点、终点和连接线';
+                        } catch (markerError) {
+                            console.error('Failed to create markers:', markerError);
+                            debugInfo.textContent = '无法创建地图标记';
+                        }
                     });
             } catch (error) {
                 const errorMsg = `创建地图失败: ${error.message}`;
                 debugInfo.textContent = errorMsg;
-                console.error('创建地图失败:', error);
+                console.error('Failed to create map:', error);
                 // 记录错误到日志文件
                 logErrorToFile(`创建地图失败: ${error.message}\n堆栈信息: ${error.stack}`);
                 amapContainer.innerHTML = `
@@ -437,63 +926,88 @@
                 `;
             }
         }
-        
+
         // 获取驾车路线数据 - 使用WebService API
         function getDrivingRoute(originCoords, destCoords) {
             return new Promise((resolve, reject) => {
-                const origin = originCoords.join(',');
-                const destination = destCoords.join(',');
+                // 确保坐标格式正确
+                const origin = Array.isArray(originCoords) ? originCoords.join(',') : originCoords;
+                const destination = Array.isArray(destCoords) ? destCoords.join(',') : destCoords;
+
+                // 验证坐标格式
+                if (!origin || !destination) {
+                    const error = new Error('坐标格式错误');
+                    debugInfo.textContent = `坐标格式错误: origin=${origin}, destination=${destination}`;
+                    reject(error);
+                    return;
+                }
+
                 const url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&key=${AMAP_KEY}`;
-                
+
                 debugInfo.textContent = `请求驾车路线: ${url.substring(0, 50)}...`;
-                console.log('请求驾车路线:', url);
-                
+                console.log('Requesting driving route:', url);
+                console.log('Origin coords:', originCoords);
+                console.log('Destination coords:', destCoords);
+
                 fetch(url)
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
-                        debugInfo.textContent = `驾车路线响应: ${JSON.stringify(data)}`;
-                        console.log('驾车路线响应:', data);
-                        resolve(data);
+                        debugInfo.textContent = `驾车路线响应状态: ${data.status}, 信息: ${data.info}`;
+                        console.log('Driving route response:', data);
+
+                        // 检查API响应状态
+                        if (data.status === '1') {
+                            resolve(data);
+                        } else {
+                            const error = new Error(`API错误: ${data.info || '未知错误'}`);
+                            debugInfo.textContent = `API错误: ${data.info}`;
+                            reject(error);
+                        }
                     })
                     .catch(error => {
                         debugInfo.textContent = `请求驾车路线失败: ${error.message}`;
-                        console.error('请求驾车路线失败:', error);
+                        console.error('Failed to request driving route:', error);
                         // 记录错误到日志文件
                         logErrorToFile(`请求驾车路线失败: ${error.message}\n堆栈信息: ${error.stack}`);
                         reject(error);
                     });
             });
         }
-        
+
         // 地理编码（地址转坐标）- 使用HTTP API
         function geocodeAddress(address) {
             debugInfo.textContent = `开始地理编码: ${address}`;
-            console.log('开始地理编码:', address);
-            
+            console.log('Starting geocoding:', address);
+
             return new Promise((resolve, reject) => {
                 // 构造请求URL
                 const url = `https://restapi.amap.com/v3/geocode/geo?key=${AMAP_KEY}&address=${encodeURIComponent(address)}`;
                 debugInfo.textContent = `地理编码请求URL: ${url.substring(0, 50)}...`;
-                console.log('地理编码请求URL:', url);
-                
+                console.log('Geocoding request URL:', url);
+
                 // 发起HTTP请求
                 fetch(url)
                     .then(response => response.json())
                     .then(data => {
                         debugInfo.textContent = `地理编码响应: ${JSON.stringify(data)}`;
-                        console.log('地理编码响应:', data);
-                        
+                        console.log('Geocoding response:', data);
+
                         if (data.status === '1' && data.geocodes && data.geocodes.length > 0) {
                             // 解析坐标
                             const location = data.geocodes[0].location;
                             const [lng, lat] = location.split(',').map(Number);
                             const coords = [lng, lat];
                             debugInfo.textContent = `地理编码成功: ${coords}`;
-                            console.log('地理编码成功:', coords);
+                            console.log('Geocoding successful:', coords);
                             resolve(coords);
                         } else {
                             debugInfo.textContent = `地理编码失败，使用默认坐标`;
-                            console.log('地理编码失败，使用默认坐标');
+                            console.log('Geocoding failed, using default coordinates');
                             // 如果地理编码失败，使用默认坐标
                             if (address.includes('武汉')) {
                                 resolve([114.402994, 30.505446]); // 武汉光谷
@@ -507,7 +1021,7 @@
                     })
                     .catch(error => {
                         debugInfo.textContent = `地理编码请求失败: ${error.message}`;
-                        console.error('地理编码请求失败:', error);
+                        console.error('Geocoding request failed:', error);
                         // 记录错误到日志文件
                         logErrorToFile(`地理编码请求失败: ${error.message}\n堆栈信息: ${error.stack}`);
                         // 使用默认坐标
@@ -522,7 +1036,7 @@
                     });
             });
         }
-        
+
         // 记录错误到日志文件
         function logErrorToFile(errorMessage) {
             try {
@@ -532,45 +1046,284 @@
                 const logPath = path.join(__dirname, 'logs.txt');
                 fs.appendFileSync(logPath, logMessage);
             } catch (logError) {
-                console.error('写入日志文件失败:', logError);
+                console.error('Failed to write to log file:', logError);
             }
         }
-        
+
         // 页面加载完成后请求旅行信息
-        window.onload = function() {
+        window.onload = function () {
             debugInfo.textContent = '页面加载完成，请求旅行信息...';
             // 请求主进程发送旅行信息
             ipcRenderer.send('request-travel-info');
         };
-        
-        // 模拟旅星移动动画
+
+        // 全局调试函数
+        window.debugTravelState = function () {
+            console.log('=== Travel State Debug ===');
+            console.log('window.routePath:', window.routePath);
+            console.log('window.currentPathIndex:', window.currentPathIndex);
+            console.log('mapInstance:', !!mapInstance);
+            console.log('travelerMarker:', !!travelerMarker);
+            console.log('isTraveling:', isTraveling);
+            console.log('travelAnimation:', !!travelAnimation);
+            console.log('travelSpeed:', travelSpeed);
+
+            if (window.routePath) {
+                console.log('Route path length:', window.routePath.length);
+                console.log('First point:', window.routePath[0]);
+                console.log('Last point:', window.routePath[window.routePath.length - 1]);
+            }
+
+            if (travelerMarker) {
+                console.log('Traveler marker position:', travelerMarker.getPosition());
+                console.log('Traveler marker visible:', travelerMarker.getVisible());
+            }
+
+            if (mapInstance) {
+                const markers = mapInstance.getAllOverlays('marker');
+                console.log('Total markers on map:', markers.length);
+                console.log('All markers:', markers);
+            }
+
+            console.log('========================');
+        };
+
+        // 测试旅行者标记创建
+        window.testTravelerMarker = function () {
+            console.log('=== Testing Traveler Marker ===');
+
+            if (!mapInstance) {
+                console.log('Map instance not available');
+                return;
+            }
+
+            if (!window.routePath || window.routePath.length === 0) {
+                console.log('Route path not available');
+                return;
+            }
+
+            // 创建测试标记
+            const testMarker = new AMap.Marker({
+                position: window.routePath[0],
+                title: '测试标记',
+                icon: new AMap.Icon({
+                    size: new AMap.Size(32, 32),
+                    image: 'data:image/svg+xml;base64,' + btoa(`
+                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="16" cy="16" r="15" fill="red" stroke="white" stroke-width="2"/>
+                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">TEST</text>
+                        </svg>
+                    `)
+                }),
+                offset: new AMap.Pixel(-16, -16),
+                zIndex: 200
+            });
+
+            mapInstance.add(testMarker);
+            console.log('Test marker created and added to map');
+            console.log('Test marker position:', testMarker.getPosition());
+
+            // 3秒后移除测试标记
+            setTimeout(() => {
+                mapInstance.remove(testMarker);
+                console.log('Test marker removed');
+            }, 3000);
+        };
+
+        // 旅行动画相关函数
+        function startTravelAnimation() {
+            console.log('=== startTravelAnimation called ===');
+            console.log('window.routePath:', window.routePath);
+            console.log('window.currentPathIndex:', window.currentPathIndex);
+            console.log('mapInstance:', !!mapInstance);
+            console.log('travelerMarker:', !!travelerMarker);
+            console.log('isTraveling:', isTraveling);
+
+            if (!window.routePath || window.routePath.length === 0) {
+                debugInfo.textContent = '没有可用的路线数据';
+                console.error('No route path available');
+                return;
+            }
+
+            if (isTraveling) {
+                console.log('Animation already running, skipping...');
+                return;
+            }
+
+            isTraveling = true;
+            debugInfo.textContent = '开始旅行动画...';
+            console.log('Starting travel animation with', window.routePath.length, 'points');
+
+            // 创建旅行者标记（如果还没有）
+            if (!travelerMarker) {
+                createTravelerMarker();
+            }
+
+            // 开始动画
+            console.log('Starting animation interval with speed:', travelSpeed, 'ms');
+            travelAnimation = setInterval(() => {
+                console.log('Animation tick - currentPathIndex:', window.currentPathIndex, 'total:', window.routePath.length);
+
+                if (window.currentPathIndex < window.routePath.length - 1) {
+                    window.currentPathIndex++;
+                    const currentPos = window.routePath[window.currentPathIndex];
+
+                    // 更新旅行者位置
+                    if (travelerMarker) {
+                        const oldPos = travelerMarker.getPosition();
+                        travelerMarker.setPosition(currentPos);
+                        const newPos = travelerMarker.getPosition();
+                        console.log('Updated traveler position from:', oldPos, 'to:', newPos);
+
+                        // 验证位置是否真的更新了
+                        if (oldPos && newPos) {
+                            const distance = Math.sqrt(
+                                Math.pow(oldPos.lng - newPos.lng, 2) +
+                                Math.pow(oldPos.lat - newPos.lat, 2)
+                            );
+                            console.log('Position change distance:', distance);
+                        }
+                    } else {
+                        console.log('Traveler marker not available, creating new one...');
+                        createTravelerMarker();
+                    }
+
+                    // 计算进度
+                    const progress = (window.currentPathIndex / (window.routePath.length - 1)) * 100;
+                    updateProgressBar(progress);
+
+                    // 更新状态文本
+                    updateStatusText(progress);
+
+                    // 跟随旅行者
+                    if (mapInstance) {
+                        mapInstance.setCenter(currentPos);
+                    }
+
+                    console.log(`Travel progress: ${progress.toFixed(1)}%`);
+                } else {
+                    // 到达目的地
+                    console.log('Reached destination, stopping animation');
+                    stopTravelAnimation();
+                    statusText.textContent = '已抵达目的地！';
+                    debugInfo.textContent = '旅行完成';
+                }
+            }, travelSpeed);
+        }
+
+        function stopTravelAnimation() {
+            if (travelAnimation) {
+                clearInterval(travelAnimation);
+                travelAnimation = null;
+            }
+            isTraveling = false;
+            debugInfo.textContent = '旅行已停止';
+        }
+
+        function createTravelerMarker() {
+            console.log('=== createTravelerMarker called ===');
+            console.log('mapInstance:', !!mapInstance);
+            console.log('window.routePath:', window.routePath);
+            console.log('routePath length:', window.routePath ? window.routePath.length : 0);
+
+            if (!mapInstance || !window.routePath || window.routePath.length === 0) {
+                console.log('Cannot create traveler marker:', {
+                    mapInstance: !!mapInstance,
+                    routePath: !!window.routePath,
+                    routePathLength: window.routePath ? window.routePath.length : 0
+                });
+                return;
+            }
+
+            try {
+                console.log('Creating traveler marker at position:', window.routePath[0]);
+
+                travelerMarker = new AMap.Marker({
+                    position: window.routePath[0],
+                    title: '旅行者',
+                    icon: new AMap.Icon({
+                        size: new AMap.Size(24, 24),
+                        image: 'data:image/svg+xml;base64,' + btoa(`
+                            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="12" r="10" fill="#FFD700" stroke="#FFA500" stroke-width="2"/>
+                                <text x="12" y="16" text-anchor="middle" fill="white" font-size="10" font-weight="bold">T</text>
+                            </svg>
+                        `)
+                    }),
+                    offset: new AMap.Pixel(-12, -12),
+                    zIndex: 100
+                });
+
+                console.log('Traveler marker object created:', travelerMarker);
+
+                mapInstance.add(travelerMarker);
+                console.log('Traveler marker added to map successfully');
+                console.log('Traveler marker position:', travelerMarker.getPosition());
+
+                // 验证标记是否真的在地图上
+                const markers = mapInstance.getAllOverlays('marker');
+                console.log('Total markers on map:', markers.length);
+                console.log('Traveler marker in map markers:', markers.includes(travelerMarker));
+
+            } catch (error) {
+                console.error('Failed to create traveler marker:', error);
+                console.error('Error details:', error.message, error.stack);
+            }
+        }
+
+        function updateProgressBar(progressPercent) {
+            const progressBar = document.querySelector('.progress');
+            if (progressBar) {
+                progressBar.style.width = progressPercent + '%';
+            }
+        }
+
+        function updateStatusText(progress) {
+            const remainingProgress = 100 - progress;
+            const remainingHours = Math.max(0, Math.floor(remainingProgress / 100 * 11));
+            statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
+        }
+
+        function createSimplifiedPath(startCoords, endCoords, pointCount = 50) {
+            const path = [];
+            for (let i = 0; i < pointCount; i++) {
+                const ratio = i / (pointCount - 1);
+                const lng = startCoords[0] + (endCoords[0] - startCoords[0]) * ratio;
+                const lat = startCoords[1] + (endCoords[1] - startCoords[1]) * ratio;
+                path.push(new AMap.LngLat(lng, lat));
+            }
+            return path;
+        }
+
+        // 模拟旅星移动动画（保留原有功能作为备用）
         let progressPercent = 30;
         const moveInterval = setInterval(() => {
-            // 每秒增加1%进度
-            progressPercent = Math.min(progressPercent + 1, 100);
-            progress.style.width = progressPercent + '%';
-            
-            // 更新状态文本
-            const remainingHours = Math.max(0, Math.floor((100 - progressPercent) / 100 * 11));
-            statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
-            
-            // 到达目的地时停止
-            if (progressPercent >= 100) {
-                clearInterval(moveInterval);
-                statusText.textContent = '已抵达目的地！';
+            // 只有在没有真实旅行动画时才使用这个
+            if (!isTraveling) {
+                progressPercent = Math.min(progressPercent + 1, 100);
+                progress.style.width = progressPercent + '%';
+
+                const remainingHours = Math.max(0, Math.floor((100 - progressPercent) / 100 * 11));
+                statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
+
+                if (progressPercent >= 100) {
+                    clearInterval(moveInterval);
+                    statusText.textContent = '已抵达目的地！';
+                }
             }
         }, 1000);
-        
+
         // 模拟获取天气信息
         function updateWeather() {
             // 模拟不同时间的天气
             const weathers = ['☀️', '⛅', '☁️', '🌧️', '❄️', '🌟'];
             weatherEl.textContent = weathers[Math.floor(Math.random() * weathers.length)];
         }
-        
+
         // 定时更新天气
         setInterval(updateWeather, 30000); // 每30秒更新一次
         updateWeather(); // 初始化天气
     </script>
 </body>
+
 </html>
