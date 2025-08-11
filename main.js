@@ -1,9 +1,6 @@
 // 加载环境变量
 require('dotenv').config();
 
-// 设置字符编码以解决乱码问题
-process.env.LANG = 'zh_CN.UTF-8';
-
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
 const path = require('path');
 const ActivityMonitor = require('./activityMonitor');
@@ -545,28 +542,40 @@ function createWaterReminderWindow() {
 
 // 截取屏幕截图
 async function captureScreenshot() {
-  // try {
-  //   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 200, height: 150 } });
-  //   if (sources && sources.length > 0) {
-  //     // 获取第一张屏幕截图
-  //     const source = sources[0];
-  //     const thumbnail = source.thumbnail;
+  try {
+    console.log('📸 Capturing screenshot...');
+    const sources = await desktopCapturer.getSources({ 
+      types: ['screen'], 
+      thumbnailSize: { width: 800, height: 600 } 
+    });
+    
+    if (sources && sources.length > 0) {
+      // 获取第一张屏幕截图
+      const source = sources[0];
+      const thumbnail = source.thumbnail;
 
-  //     // 将截图转换为base64编码
-  //     const base64Data = thumbnail.toDataURL().replace(/^data:image\/(png|jpeg);base64,/, '');
+      // 将截图转换为base64编码
+      const base64Data = thumbnail.toDataURL().replace(/^data:image\/(png|jpeg);base64,/, '');
+      console.log('📸 Screenshot captured, size:', base64Data.length, 'characters');
 
-  //     // 使用AI分析截图内容
-  //     const aiResponse = await analyzeScreenshot(base64Data);
-  //     return aiResponse;
-  //   }
-  // } catch (error) {
-  //   console.error('Screenshot capture failed:', error);
-  // }
+      // 使用AI分析截图内容
+      console.log('🤖 Analyzing screenshot with AI...');
+      const aiResponse = await analyzeScreenshot(base64Data);
+      console.log('✅ AI analysis completed:', aiResponse);
+      return aiResponse;
+    } else {
+      console.log('❌ No screen sources found');
+    }
+  } catch (error) {
+    console.error('❌ Screenshot capture failed:', error);
+  }
 
-  // 默认响应
+  // 如果出错，返回默认响应
+  console.log('🔄 Returning fallback response');
   return {
     message: "替你去看北京天安门？",
-    shouldTravel: true
+    shouldTravel: true,
+    confidence: 0.5
   };
 }
 

@@ -3,7 +3,7 @@ const OpenAI = require('openai');
 // 初始化OpenAI客户端
 const openai = new OpenAI({
     apiKey: process.env.DASHSCOPE_API_KEY || "sk-xxx", // 请配置您的API Key
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    baseURL: process.env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
 });
 
 /**
@@ -47,8 +47,9 @@ function extractFallbackResponse(response) {
 async function analyzeScreenshot(base64Image) {
     // 即使没有配置API Key，也返回默认响应
     try {
-        // 如果没有配置API Key，则返回默认响应
-        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+        // 检查API Key配置
+        const apiKey = process.env.DASHSCOPE_API_KEY;
+        if (!apiKey || apiKey === "sk-xxx") {
             console.log("API Key not configured, returning default response");
             // 随机决定是否触发旅行（模拟AI判断）
             const shouldTravel = Math.random() > 0.5;
@@ -78,16 +79,23 @@ async function analyzeScreenshot(base64Image) {
             }
         }
 
+        console.log("Using API Key:", apiKey.substring(0, 10) + "...");
+        console.log("Base URL:", process.env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1");
+
+        console.log("Sending request to AI service...");
+        console.log("Model:", "qwen-vl-plus");
+        console.log("Image size:", base64Image.length, "characters");
+        
         const completion = await openai.chat.completions.create({
-            model: "qwen-plus",
+            model: "qwen-vl-plus",
             messages: [
                 {
                     role: "system",
-                    content: `你是一个有趣的桌面伴侣助手。用户会发送截图给你，你需要分析截图内容并给出回应。
+                    content: `你是罗小黑，是一个幼年小猫妖，对世界充满好奇，喜欢旅行，嫉恶如仇，早安喵，午安喵，晚安喵喵喵。人类会发送截图给你，你需要分析截图内容并给出回应。
 
                     分析规则：
                     1. 如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
-                    2. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应但不建议旅行
+                    2. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等
                     3. 回应应该简短、有趣且富有想象力，不超过20个字
 
                     请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等markdown关键字：
@@ -107,7 +115,7 @@ async function analyzeScreenshot(base64Image) {
                     content: [
                         {
                             type: "text",
-                            text: "我刚截了一张图，你能看出这是什么吗？请分析并按照指定格式回复。"
+                            text: "我刚截了一张图，快看？按照要求回答哦。"
                         },
                         {
                             type: "image_url",
@@ -119,8 +127,10 @@ async function analyzeScreenshot(base64Image) {
                 }
             ],
             max_tokens: 200,
-            temperature: 0.3
+            temperature: 0.5
         });
+        
+        console.log("AI service response received successfully");
 
         const aiResponse = completion.choices[0].message.content.trim();
         console.log('Raw AI response:', aiResponse);
