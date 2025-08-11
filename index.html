@@ -99,9 +99,13 @@
             transform: scale(0.95);
         }
 
-        .pet-svg {
+        .pet-image {
             width: 60px;
             height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            pointer-events: none;
+            user-select: none;
         }
 
         .controls {
@@ -191,12 +195,7 @@
 
     <!-- 桌面宠物主体 -->
     <div class="pet-container" id="pet">
-        <svg class="pet-svg" viewBox="0 0 100 100">
-            <circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-            <circle cx="35" cy="40" r="5" fill="#333" />
-            <circle cx="65" cy="40" r="5" fill="#333" />
-            <path d="M 30 65 Q 50 80 70 65" stroke="#333" stroke-width="3" fill="none" />
-        </svg>
+        <img class="pet-image" src="images/pet.gif" alt="桌宠" />
     </div>
 
     <script>
@@ -206,33 +205,8 @@
         const funBtn = document.getElementById('funBtn');
         const statusBtn = document.getElementById('statusBtn');
 
-        // 宠物随机动作
-        const petSVG = pet.querySelector('.pet-svg');
-        setInterval(() => {
-            const expressions = [
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="35" cy="40" r="5" fill="#333" />
-                <circle cx="65" cy="40" r="5" fill="#333" />
-                <path d="M 30 65 Q 50 80 70 65" stroke="#333" stroke-width="3" fill="none" />`,
-
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="35" cy="40" r="5" fill="#333" />
-                <circle cx="65" cy="40" r="5" fill="#333" />
-                <path d="M 30 70 Q 50 60 70 70" stroke="#333" stroke-width="3" fill="none" />`,
-
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="30" cy="40" r="5" fill="#333" />
-                <circle cx="70" cy="40" r="5" fill="#333" />
-                <circle cx="50" cy="60" r="8" fill="#333" />`,
-
-                `<circle cx="50" cy="50" r="45" fill="#FFD6A5" />
-                <circle cx="35" cy="35" r="5" fill="#333" />
-                <circle cx="65" cy="35" r="5" fill="#333" />
-                <path d="M 40 70 Q 50 65 60 70" stroke="#333" stroke-width="3" fill="none" />`
-            ];
-
-            petSVG.innerHTML = expressions[Math.floor(Math.random() * expressions.length)];
-        }, 5000);
+        // 宠物动画已通过GIF实现，无需代码控制
+        console.log('Main page pet animation loaded from GIF file');
 
         // 点击宠物显示当前状态
         pet.addEventListener('click', () => {
