@@ -9,6 +9,8 @@ class WeatherService {
         this.cacheExpiration = 5 * 60 * 1000; // 5分钟缓存过期
         this.currentLocation = null; // 当前位置
         this.lastKnownCity = null; // 上一个已知城市
+        this.lastRequestTime = 0; // 上次请求时间
+        this.requestInterval = 3000; // 请求间隔3秒，避免QPS超限
     }
 
     // 根据经纬度获取天气信息
@@ -34,16 +36,38 @@ class WeatherService {
         }
     }
 
+    // 请求限流控制
+    async waitForNextRequest() {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        if (timeSinceLastRequest < this.requestInterval) {
+            const waitTime = this.requestInterval - timeSinceLastRequest;
+            console.log(`Waiting ${waitTime}ms before next API request to avoid rate limit`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        this.lastRequestTime = Date.now();
+    }
+
     // 逆地理编码 - 坐标转地址
     async reverseGeocode(lng, lat) {
         try {
+            // 检查缓存
+            const cacheKey = `geocode_${lng}_${lat}`;
+            const cached = this.weatherCache.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < this.cacheExpiration) {
+                return cached.data;
+            }
+
+            // 限流控制
+            await this.waitForNextRequest();
+
             const url = `https://restapi.amap.com/v3/geocode/regeo?key=${this.amapKey}&location=${lng},${lat}&radius=3000&extensions=all&batch=false&roadlevel=0`;
 
             const data = await this.httpRequest(url);
 
             if (data.status === '1' && data.regeocode) {
                 const addressComponent = data.regeocode.addressComponent;
-                return {
+                const result = {
                     province: addressComponent.province || '',
                     city: addressComponent.city || addressComponent.province || '',
                     district: addressComponent.district || '',
@@ -51,11 +75,33 @@ class WeatherService {
                     formattedAddress: data.regeocode.formatted_address || '',
                     coordinates: [lng, lat]
                 };
+
+                // 缓存地理编码结果
+                this.weatherCache.set(cacheKey, {
+                    data: result,
+                    timestamp: Date.now()
+                });
+
+                return result;
             } else {
-                throw new Error(`Reverse geocoding failed: ${data.info}`);
+                throw new Error(`Reverse geocoding failed: ${data.info || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Reverse geocoding error:', error);
+
+            // 如果是QPS超限错误，返回默认城市信息
+            if (error.message && error.message.includes('EXCEEDED_THE_LIMIT')) {
+                console.log('API rate limit exceeded, using default city info');
+                return {
+                    province: '未知省份',
+                    city: '未知城市',
+                    district: '未知区域',
+                    adcode: '100000', // 默认使用全国的城市代码
+                    formattedAddress: '位置信息暂时不可用',
+                    coordinates: [lng, lat]
+                };
+            }
+
             return null;
         }
     }
@@ -69,6 +115,9 @@ class WeatherService {
             if (cached && Date.now() - cached.timestamp < this.cacheExpiration) {
                 return cached.data;
             }
+
+            // 限流控制
+            await this.waitForNextRequest();
 
             // 请求天气数据
             const url = `https://restapi.amap.com/v3/weather/weatherInfo?key=${this.amapKey}&city=${adcode}&extensions=base`;
@@ -89,10 +138,16 @@ class WeatherService {
                 console.log(`Weather data received: ${weatherData.city} - ${weatherData.summary}`);
                 return weatherData;
             } else {
-                throw new Error(`Weather API failed: ${data.info}`);
+                throw new Error(`Weather API failed: ${data.info || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Error getting weather by city:', error);
+
+            // 如果是QPS超限错误，返回默认天气
+            if (error.message && error.message.includes('EXCEEDED_THE_LIMIT')) {
+                console.log('Weather API rate limit exceeded, using default weather');
+            }
+
             return this.getDefaultWeather();
         }
     }

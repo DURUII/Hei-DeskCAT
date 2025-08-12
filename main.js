@@ -56,7 +56,8 @@ let currentTravelStatus = {
   lastCity: null,
   totalDistance: 0,
   traveledDistance: 0,
-  progress: 0
+  progress: 0,
+  lastWeatherUpdateTime: 0
 };
 
 // 小旅星窗口管理
@@ -346,9 +347,21 @@ function createPetWindow() {
         // 设置天气服务的当前位置
         weatherService.setCurrentLocation(data.lng, data.lat);
 
-        // 获取当前位置的天气信息
-        const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
-        currentTravelStatus.currentWeather = weatherInfo;
+        // 控制天气更新频率，避免QPS超限
+        const now = Date.now();
+        const weatherUpdateInterval = 300000; // 5分钟更新一次
+
+        if (now - currentTravelStatus.lastWeatherUpdateTime > weatherUpdateInterval) {
+          try {
+            // 获取当前位置的天气信息
+            const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+            currentTravelStatus.currentWeather = weatherInfo;
+            currentTravelStatus.lastWeatherUpdateTime = now;
+            console.log(`Travel weather updated: ${weatherInfo.city} - ${weatherInfo.summary}`);
+          } catch (error) {
+            console.error('Error updating travel weather:', error);
+          }
+        }
 
         // 标记旅行正在进行
         currentTravelStatus.isInProgress = true;

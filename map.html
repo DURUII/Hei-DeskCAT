@@ -459,7 +459,7 @@
         // 天气相关变量
         let currentWeatherData = null;
         let lastWeatherUpdate = 0;
-        const WEATHER_UPDATE_INTERVAL = 120000; // 2分钟更新一次天气
+        const WEATHER_UPDATE_INTERVAL = 300000; // 5分钟更新一次天气，避免QPS超限
 
         closeBtn.addEventListener('click', () => {
             try {
