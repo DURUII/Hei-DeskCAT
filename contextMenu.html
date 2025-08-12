@@ -92,6 +92,11 @@
             <span>打开主页面</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="openMapWindow">
+            <span>🗺️</span>
+            <span>打开地图</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item transparency-control" id="transparencyControl">
             <span>🎨</span>
             <span>透明度调节</span>
@@ -107,6 +112,7 @@
         try {
             const { ipcRenderer } = require('electron');
             const openMainWindow = document.getElementById('openMainWindow');
+            const openMapWindow = document.getElementById('openMapWindow');
             const exitApp = document.getElementById('exitApp');
             const contextMenu = document.getElementById('contextMenu');
             const transparencyControl = document.getElementById('transparencyControl');
@@ -143,6 +149,17 @@
                     window.close();
                 } catch (error) {
                     console.error('Error opening main window:', error);
+                }
+            });
+
+            // 打开地图
+            openMapWindow.addEventListener('click', () => {
+                console.log('Opening map window from context menu');
+                try {
+                    ipcRenderer.send('open-map-window');
+                    window.close();
+                } catch (error) {
+                    console.error('Error opening map window:', error);
                 }
             });
 
