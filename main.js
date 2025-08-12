@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
 const path = require('path');
-const ActivityMonitor = require('./activityMonitor');
+const { ActivityMonitor, setCreatePetStatusWindowFunction } = require('./activityMonitor');
 const { analyzeScreenshot, generateFunReminder, generateJourneyStatus } = require('./aiService');
 const AMapService = require('./amapService');
 
@@ -30,6 +30,14 @@ let transparencyWindow = null; // 添加右键菜单窗口跟踪
 // 拖动相关变量
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
+
+// 吸附状态管理
+let isSnapped = false;
+let snapInfo = {
+  type: '',
+  position: null,
+  attachedWindow: null
+};
 
 // 全局旅行数据
 let globalTravelData = null;
@@ -143,13 +151,17 @@ function createPetWindow() {
     });
   });
 
-  // 监听宠物点击事件
-  ipcMain.on('pet-clicked', (event, message) => {
-    console.log('Pet clicked, showing status window with message:', message);
+  // 监听宠物点击事件 - 触发趣味提醒
+  ipcMain.on('pet-clicked', async (event) => {
+    console.log('Pet clicked, triggering fun reminder');
     try {
-      createPetStatusWindow(message);
+      // 生成AI趣味提醒
+      const funMessage = await generateFunReminder();
+      createPetStatusWindow(funMessage);
     } catch (error) {
-      console.error('Error creating pet status window:', error);
+      console.error('Error creating fun reminder:', error);
+      // 如果生成失败，显示默认消息
+      createPetStatusWindow('今天也要开开心心的哦！✨');
     }
   });
 
@@ -215,6 +227,22 @@ function createPetWindow() {
     isDragging = true;
     dragOffset = { x: offsetX, y: offsetY };
 
+    // 拖动开始时清除吸附状态，确保正常拖动
+    if (isSnapped) {
+      console.log('拖动开始，清除吸附状态');
+      isSnapped = false;
+      snapInfo = {
+        type: '',
+        position: null,
+        attachedWindow: null
+      };
+
+      // 清除吸附窗口记录
+      if (petWindow && petWindow.attachedToWindow) {
+        delete petWindow.attachedToWindow;
+      }
+    }
+
     // 临时禁用点击穿透，允许拖动
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.setIgnoreMouseEvents(false);
@@ -224,10 +252,10 @@ function createPetWindow() {
     }
   });
 
-  // 监听绝对位置移动
+  // 监听绝对位置移动 - 简化版本，只设置位置不记录日志
   ipcMain.on('move-pet-absolute', (event, { mouseX, mouseY }) => {
     if (petWindow && isDragging) {
-      // 直接将窗口位置设置为鼠标位置减去偏移量
+      // 拖动过程中直接设置位置，不进行任何检查或记录
       const newX = Math.round(mouseX - dragOffset.x);
       const newY = Math.round(mouseY - dragOffset.y);
       petWindow.setPosition(newX, newY);
@@ -259,197 +287,164 @@ function createPetWindow() {
       petWindow.setFocusable(true);
     }
 
-    if (petWindow && !petWindow.isDestroyed()) {
-      try {
-        const [x, y] = petWindow.getPosition();
-        const [width, height] = petWindow.getSize();
+    // 拖动结束后进行吸附判定
+    performSnapCheck();
 
-        // 获取屏幕尺寸
-        const { screen } = require('electron');
-        const primaryDisplay = screen.getPrimaryDisplay();
-        const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-
-        // 边缘吸附阈值（像素）
-        const snapThreshold = 50;
-
-        let newX = x;
-        let newY = y;
-        let snapped = false;
-        let snapType = '';
-        let shouldFlip = false;
-
-        // 获取所有可见窗口信息
-        const allWindows = BrowserWindow.getAllWindows();
-        const visibleWindows = allWindows.filter(win =>
-          win.isVisible() && !win.isDestroyed() && win !== petWindow
-        );
-
-        // 检测屏幕边缘吸附
-        let screenSnapped = false;
-
-        // 检测左边缘吸附
-        if (x <= snapThreshold) {
-          newX = 0;
-          screenSnapped = true;
-          snapType = '左边缘';
-        }
-        // 检测右边缘吸附
-        else if (x + width >= screenWidth - snapThreshold) {
-          newX = screenWidth - width;
-          screenSnapped = true;
-          snapType = '右边缘';
-        }
-
-        // 检测上边缘吸附
-        if (y <= snapThreshold) {
-          newY = 0;
-          screenSnapped = true;
-          snapType = '上边缘';
-          shouldFlip = true; // 顶部吸附时翻转
-        }
-        // 检测下边缘吸附
-        else if (y + height >= screenHeight - snapThreshold) {
-          newY = screenHeight - height;
-          screenSnapped = true;
-          snapType = '下边缘';
-        }
-
-        // 特殊处理：屏幕角落吸附
-        const cornerThreshold = 30;
-
-        // 左上角
-        if (x <= cornerThreshold && y <= cornerThreshold) {
-          newX = 0;
-          newY = 0;
-          screenSnapped = true;
-          snapType = '左上角';
-          shouldFlip = true;
-        }
-        // 右上角
-        else if (x + width >= screenWidth - cornerThreshold && y <= cornerThreshold) {
-          newX = screenWidth - width;
-          newY = 0;
-          screenSnapped = true;
-          snapType = '右上角';
-          shouldFlip = true;
-        }
-        // 左下角
-        else if (x <= cornerThreshold && y + height >= screenHeight - cornerThreshold) {
-          newX = 0;
-          newY = screenHeight - height;
-          screenSnapped = true;
-          snapType = '左下角';
-        }
-        // 右下角
-        else if (x + width >= screenWidth - cornerThreshold && y + height >= screenHeight - cornerThreshold) {
-          newX = screenWidth - width;
-          newY = screenHeight - height;
-          screenSnapped = true;
-          snapType = '右下角';
-        }
-
-        // 检测其他窗口边缘吸附
-        let windowSnapped = false;
-        let closestWindow = null;
-        let minDistance = Infinity;
-        let attachedWindow = null; // 记录吸附的窗口
-
-        for (const win of visibleWindows) {
-          try {
-            const [winX, winY] = win.getPosition();
-            const [winWidth, winHeight] = win.getSize();
-
-            // 优先检测上方位置（如果空间足够）
-            const topSpace = winY;
-            const canPlaceOnTop = topSpace >= height;
-
-            // 计算宠物窗口与目标窗口各边的距离
-            const distances = [
-              // 优先：上方位置（如果空间足够）
-              ...(canPlaceOnTop ? [{
-                type: '正上方',
-                distance: Math.abs(y - (winY - height)),
-                x: winX + Math.floor((winWidth - width) / 2), // 居中放置
-                y: winY - height,
-                shouldFlip: false,
-                priority: 1
-              }] : []),
-              // 其他边缘
-              { type: '左边缘', distance: Math.abs(x - (winX + winWidth)), x: winX + winWidth, y: newY, priority: 2 },
-              { type: '右边缘', distance: Math.abs((x + width) - winX), x: winX - width, y: newY, priority: 2 },
-              { type: '上边缘', distance: Math.abs(y - (winY + winHeight)), x: newX, y: winY + winHeight, shouldFlip: true, priority: 2 },
-              { type: '下边缘', distance: Math.abs((y + height) - winY), x: newX, y: winY - height, priority: 2 }
-            ];
-
-            for (const dist of distances) {
-              if (dist.distance <= snapThreshold && dist.distance < minDistance) {
-                // 检查是否在屏幕范围内
-                const isInScreenRange =
-                  dist.x >= 0 && dist.x <= screenWidth - width &&
-                  dist.y >= 0 && dist.y <= screenHeight - height;
-
-                if (isInScreenRange) {
-                  // 优先选择优先级高的位置
-                  if (!closestWindow || dist.priority < closestWindow.priority ||
-                    (dist.priority === closestWindow.priority && dist.distance < minDistance)) {
-                    minDistance = dist.distance;
-                    closestWindow = { ...dist, windowTitle: win.getTitle() };
-                    attachedWindow = win; // 记录吸附的窗口
-                    windowSnapped = true;
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            console.error('检测窗口边缘失败:', error);
-          }
-        }
-
-        // 优先使用窗口吸附，其次使用屏幕吸附
-        if (windowSnapped && closestWindow) {
-          newX = closestWindow.x;
-          newY = closestWindow.y;
-          snapType = `${closestWindow.windowTitle}的${closestWindow.type}`;
-          shouldFlip = closestWindow.shouldFlip || false;
-          snapped = true;
-
-          // 记录当前吸附的窗口信息，用于后续跟随
-          if (attachedWindow) {
-            petWindow.attachedToWindow = {
-              id: attachedWindow.id,
-              title: attachedWindow.getTitle(),
-              type: closestWindow.type, // 记录吸附类型
-              position: [newX, newY]
-            };
-          }
-        } else if (screenSnapped) {
-          snapped = true;
-          // 清除吸附窗口记录
-          if (petWindow.attachedToWindow) {
-            delete petWindow.attachedToWindow;
-          }
-        }
-
-        // 如果检测到边缘吸附，移动窗口
-        if (snapped) {
-          petWindow.setPosition(newX, newY);
-
-          console.log('边缘吸附完成:', {
-            from: [x, y],
-            to: [newX, newY],
-            type: snapType,
-            shouldFlip: shouldFlip
-          });
-
-          // 通知渲染进程吸附完成，包含吸附类型和翻转信息
-          petWindow.webContents.send('snap-completed', newX, newY, snapType, shouldFlip);
-        }
-
-      } catch (error) {
-        console.error('边缘吸附失败:', error);
-      }
-    }
+    // 延迟确保位置更新完成
+    setTimeout(() => {
+      console.log('Drag ended, position should be updated');
+      // 可以在这里添加拖动结束后的其他逻辑
+    }, 50);
   });
+
+  // 监听右键菜单关闭事件
+
+  // 吸附检查函数 - 在拖动结束后执行
+  function performSnapCheck() {
+    if (!petWindow || petWindow.isDestroyed()) {
+      return;
+    }
+
+    try {
+      const [x, y] = petWindow.getPosition();
+      const [width, height] = petWindow.getSize();
+
+      // 获取屏幕尺寸
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
+      // 边缘吸附阈值（像素）
+      const snapThreshold = 50;
+
+      let newX = x;
+      let newY = y;
+      let snapped = false;
+      let snapType = '';
+      let shouldFlip = false;
+
+      // 只进行屏幕边缘吸附，不吸附到其他窗口
+      // 移除窗口吸附相关代码
+
+      // 检测屏幕边缘吸附
+      let screenSnapped = false;
+
+      // 检测左边缘吸附
+      if (x <= snapThreshold) {
+        newX = 0;
+        screenSnapped = true;
+        snapType = '左边缘';
+      }
+      // 检测右边缘吸附
+      else if (x + width >= screenWidth - snapThreshold) {
+        newX = screenWidth - width;
+        screenSnapped = true;
+        snapType = '右边缘';
+      }
+
+      // 检测上边缘吸附
+      if (y <= snapThreshold) {
+        newY = 0;
+        screenSnapped = true;
+        snapType = '上边缘';
+        shouldFlip = true; // 顶部吸附时翻转
+      }
+      // 检测下边缘吸附
+      else if (y + height >= screenHeight - snapThreshold) {
+        newY = screenHeight - height;
+        screenSnapped = true;
+        snapType = '下边缘';
+      }
+
+      // 特殊处理：屏幕角落吸附
+      const cornerThreshold = 30;
+
+      // 左上角
+      if (x <= cornerThreshold && y <= cornerThreshold) {
+        newX = 0;
+        newY = 0;
+        screenSnapped = true;
+        snapType = '左上角';
+        shouldFlip = true;
+      }
+      // 右上角
+      else if (x + width >= screenWidth - cornerThreshold && y <= cornerThreshold) {
+        newX = screenWidth - width;
+        newY = 0;
+        screenSnapped = true;
+        snapType = '右上角';
+        shouldFlip = true;
+      }
+      // 左下角
+      else if (x <= cornerThreshold && y + height >= screenHeight - cornerThreshold) {
+        newX = 0;
+        newY = screenHeight - height;
+        screenSnapped = true;
+        snapType = '左下角';
+      }
+      // 右下角
+      else if (x + width >= screenWidth - cornerThreshold && y + height >= screenHeight - cornerThreshold) {
+        newX = screenWidth - width;
+        newY = screenHeight - height;
+        screenSnapped = true;
+        snapType = '右下角';
+      }
+
+
+
+      // 只进行屏幕边缘吸附
+      if (screenSnapped) {
+        snapped = true;
+
+        // 更新全局吸附状态
+        isSnapped = true;
+        snapInfo = {
+          type: snapType,
+          position: [newX, newY],
+          attachedWindow: null
+        };
+
+        // 清除吸附窗口记录
+        if (petWindow.attachedToWindow) {
+          delete petWindow.attachedToWindow;
+        }
+      } else {
+        // 没有吸附，清除吸附状态
+        isSnapped = false;
+        snapInfo = {
+          type: '',
+          position: null,
+          attachedWindow: null
+        };
+
+        // 清除吸附窗口记录
+        if (petWindow.attachedToWindow) {
+          delete petWindow.attachedToWindow;
+        }
+      }
+
+      // 如果检测到边缘吸附，移动窗口
+      if (snapped) {
+        petWindow.setPosition(newX, newY);
+
+        console.log('边缘吸附完成:', {
+          from: [x, y],
+          to: [newX, newY],
+          type: snapType,
+          shouldFlip: shouldFlip,
+          isSnapped: isSnapped
+        });
+
+        // 只通知渲染进程位置和翻转信息，不包含吸附类型消息
+        petWindow.webContents.send('snap-completed', newX, newY, '', shouldFlip);
+      } else {
+        console.log('未检测到吸附，清除吸附状态');
+      }
+
+    } catch (error) {
+      console.error('边缘吸附检查失败:', error);
+    }
+  }
 
   // 监听右键菜单关闭事件
   ipcMain.on('context-menu-closed', (event) => {
@@ -668,8 +663,31 @@ function createPetStatusWindow(message) {
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
   // 获取宠物窗口位置和大小
-  const petPosition = petWindow ? petWindow.getPosition() : [screenWidth - 120, screenHeight - 120];
-  const petSize = petWindow ? petWindow.getSize() : [60, 60];
+  let petPosition, petSize;
+
+  if (petWindow && !petWindow.isDestroyed()) {
+    try {
+      // 强制刷新位置信息
+      petPosition = petWindow.getPosition();
+      petSize = petWindow.getSize();
+
+      // 验证位置信息的有效性
+      if (petPosition && Array.isArray(petPosition) && petPosition.length === 2 &&
+        petSize && Array.isArray(petSize) && petSize.length === 2) {
+        console.log('Pet window position:', petPosition, 'size:', petSize);
+      } else {
+        throw new Error('Invalid position or size data');
+      }
+    } catch (error) {
+      console.error('Error getting pet window position:', error);
+      petPosition = [screenWidth - 120, screenHeight - 120];
+      petSize = [100, 100];
+    }
+  } else {
+    petPosition = [screenWidth - 120, screenHeight - 120];
+    petSize = [100, 100];
+    console.log('Using default pet position:', petPosition);
+  }
 
   // 气泡窗口的尺寸
   const bubbleWidth = 220;
@@ -679,30 +697,34 @@ function createPetStatusWindow(message) {
   // 计算最佳位置
   let bubbleX, bubbleY, bubbleDirection;
 
+  // 计算桌宠中心位置
+  const petCenterX = petPosition[0] + (petSize[0] / 2);
+  const petCenterY = petPosition[1] + (petSize[1] / 2);
+
   // 优先尝试上方位置
   if (petPosition[1] >= bubbleHeight + bubbleTailHeight + 10) {
     // 上方有足够空间
-    bubbleX = petPosition[0] + (petSize[0] / 2) - (bubbleWidth / 2);
+    bubbleX = petCenterX - (bubbleWidth / 2);
     bubbleY = petPosition[1] - bubbleHeight - bubbleTailHeight;
     bubbleDirection = 'top';
   } else if (petPosition[1] + petSize[1] + bubbleHeight + bubbleTailHeight <= screenHeight) {
     // 下方有足够空间
-    bubbleX = petPosition[0] + (petSize[0] / 2) - (bubbleWidth / 2);
+    bubbleX = petCenterX - (bubbleWidth / 2);
     bubbleY = petPosition[1] + petSize[1] + bubbleTailHeight;
     bubbleDirection = 'bottom';
   } else if (petPosition[0] >= bubbleWidth + bubbleTailHeight + 10) {
     // 左侧有足够空间
     bubbleX = petPosition[0] - bubbleWidth - bubbleTailHeight;
-    bubbleY = petPosition[1] + (petSize[1] / 2) - (bubbleHeight / 2);
+    bubbleY = petCenterY - (bubbleHeight / 2);
     bubbleDirection = 'left';
   } else if (petPosition[0] + petSize[0] + bubbleWidth + bubbleTailHeight <= screenWidth) {
     // 右侧有足够空间
     bubbleX = petPosition[0] + petSize[0] + bubbleTailHeight;
-    bubbleY = petPosition[1] + (petSize[1] / 2) - (bubbleHeight / 2);
+    bubbleY = petCenterY - (bubbleHeight / 2);
     bubbleDirection = 'right';
   } else {
     // 如果所有方向都没有足够空间，强制显示在上方
-    bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, petPosition[0] + (petSize[0] / 2) - (bubbleWidth / 2)));
+    bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, petCenterX - (bubbleWidth / 2)));
     bubbleY = Math.max(10, petPosition[1] - bubbleHeight - bubbleTailHeight);
     bubbleDirection = 'top';
   }
@@ -711,7 +733,25 @@ function createPetStatusWindow(message) {
   bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, bubbleX));
   bubbleY = Math.max(10, Math.min(screenHeight - bubbleHeight - 10, bubbleY));
 
+  // 验证计算出的位置是否合理
+  const distanceFromPet = Math.sqrt(
+    Math.pow(bubbleX + bubbleWidth / 2 - petCenterX, 2) +
+    Math.pow(bubbleY + bubbleHeight / 2 - petCenterY, 2)
+  );
+
+  // 如果气泡距离桌宠太远（超过200像素），使用默认位置
+  if (distanceFromPet > 200) {
+    console.warn(`Bubble too far from pet (${distanceFromPet}px), using default position`);
+    bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, petCenterX - bubbleWidth / 2));
+    bubbleY = Math.max(10, Math.min(screenHeight - bubbleHeight - 10, petCenterY - bubbleHeight / 2));
+    bubbleDirection = 'top';
+  }
+
   console.log(`Positioning bubble at (${bubbleX}, ${bubbleY}) with direction: ${bubbleDirection}`);
+  console.log(`Pet center: (${petCenterX}, ${petCenterY}), Pet position: (${petPosition[0]}, ${petPosition[1]}), Pet size: (${petSize[0]}, ${petSize[1]})`);
+  console.log(`Screen size: (${screenWidth}, ${screenHeight}), Bubble size: (${bubbleWidth}, ${bubbleHeight})`);
+  console.log(`Distance from pet: ${distanceFromPet}px`);
+
   newPetStatusWindow.setPosition(Math.round(bubbleX), Math.round(bubbleY));
 
   // 通过IPC传递消息和气泡方向
@@ -1030,42 +1070,10 @@ function createBubbleWindow(message) {
   return bubbleWindow;
 }
 
-// 创建喝水提醒窗口
+// 创建喝水提醒窗口 - 使用小旅星窗口
 function createWaterReminderWindow() {
-  if (waterReminderWindow) {
-    waterReminderWindow.focus();
-    return;
-  }
-
-  waterReminderWindow = new BrowserWindow({
-    width: 300,
-    height: 200,
-    frame: false,
-    alwaysOnTop: true,
-    transparent: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
-
-  waterReminderWindow.loadFile('waterReminder.html');
-
-  // 设置窗口位置到屏幕中央
-  const { screen } = require('electron');
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-
-  waterReminderWindow.setPosition(
-    Math.floor((width - 300) / 2),
-    Math.floor((height - 200) / 2)
-  );
-
-  waterReminderWindow.on('closed', () => {
-    waterReminderWindow = null;
-  });
-
-  return waterReminderWindow;
+  const waterMessage = '💧 该喝水啦！记得保持水分补充哦～';
+  createPetStatusWindow(waterMessage);
 }
 
 // 截取屏幕截图
@@ -1121,16 +1129,8 @@ function registerScreenshotListener() {
       const aiResponse = await captureScreenshot();
       console.log('AI analysis result:', aiResponse);
 
-      // 使用Windows原生通知显示AI回复
-      const notification = {
-        title: 'DeskTripper',
-        body: aiResponse.message,
-        icon: path.join(__dirname, 'icon.png') // 添加图标路径
-      };
-
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
-      }
+      // 使用小旅星窗口显示AI回复
+      createPetStatusWindow(aiResponse.message);
 
       // 如果AI判断需要触发旅行，则显示气泡提示
       if (aiResponse.shouldTravel) {
@@ -1188,16 +1188,7 @@ function registerScreenshotListener() {
       console.log('Manual fun reminder triggered!');
       // 生成AI趣味提醒
       const funMessage = await generateFunReminder();
-
-      const notification = {
-        title: 'Fun Reminder',
-        body: funMessage,
-        icon: path.join(__dirname, 'icon.png') // 添加图标路径
-      };
-
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
-      }
+      createPetStatusWindow(funMessage);
     });
 
     if (!ret3) {
@@ -1317,32 +1308,14 @@ ipcMain.on('manual-water-reminder', () => {
 ipcMain.on('manual-fun-reminder', async () => {
   // 生成AI趣味提醒
   const funMessage = await generateFunReminder();
-
-  const notification = {
-    title: 'Fun Reminder',
-    body: funMessage,
-    icon: path.join(__dirname, 'icon.png') // 添加图标路径
-  };
-
-  if (Notification.isSupported()) {
-    new Notification(notification).show();
-  }
+  createPetStatusWindow(funMessage);
 });
 
 // IPC事件处理：显示当前旅程状态
 ipcMain.on('check-journey-status', async () => {
   // 生成AI旅程状态
   const statusMessage = await generateJourneyStatus();
-
-  const notification = {
-    title: 'Journey Status',
-    body: statusMessage,
-    icon: path.join(__dirname, 'icon.png') // 添加图标路径
-  };
-
-  if (Notification.isSupported()) {
-    new Notification(notification).show();
-  }
+  createPetStatusWindow(statusMessage);
 });
 
 // 应用准备就绪时执行
@@ -1363,6 +1336,9 @@ app.whenReady().then(() => {
     createMainWindow();
     createPetWindow(); // 创建宠物窗口
     registerScreenshotListener();
+
+    // 设置ActivityMonitor的createPetStatusWindow函数
+    setCreatePetStatusWindowFunction(createPetStatusWindow);
     activityMonitor = new ActivityMonitor();
   }, 1000);
 }).catch(err => {
@@ -1396,117 +1372,24 @@ app.on('will-quit', () => {
   ipcMain.removeAllListeners('request-travel-info');
 });
 
-// 窗口移动监听器，让宠物跟随吸附的窗口
+// 窗口移动监听器 - 由于只进行屏幕边缘吸附，此功能已简化
 function setupWindowMoveListener() {
-  // 定期检查吸附窗口是否移动
-  setInterval(() => {
-    if (petWindow && !petWindow.isDestroyed() && petWindow.attachedToWindow) {
-      try {
-        const attachedWindow = BrowserWindow.fromId(petWindow.attachedToWindow.id);
-
-        if (attachedWindow && !attachedWindow.isDestroyed() && attachedWindow.isVisible()) {
-          // 窗口仍然存在且可见，检查位置是否变化
-          const [winX, winY] = attachedWindow.getPosition();
-          const [winWidth, winHeight] = attachedWindow.getSize();
-          const [petX, petY] = petWindow.getPosition();
-
-          // 根据吸附类型计算新位置
-          let newX = petX;
-          let newY = petY;
-          let shouldUpdate = false;
-
-          if (petWindow.attachedToWindow.type === '正上方') {
-            newX = winX + Math.floor((winWidth - petWindow.getSize()[0]) / 2);
-            newY = winY - petWindow.getSize()[1];
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '左边缘') {
-            newX = winX + winWidth;
-            newY = petY;
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '右边缘') {
-            newX = winX - petWindow.getSize()[0];
-            newY = petY;
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '上边缘') {
-            newX = petX;
-            newY = winY + winHeight;
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '下边缘') {
-            newX = petX;
-            newY = winY - petWindow.getSize()[1];
-            shouldUpdate = true;
-          }
-
-          if (shouldUpdate && (Math.abs(newX - petX) > 1 || Math.abs(newY - petY) > 1)) {
-            petWindow.setPosition(newX, newY);
-            console.log('宠物跟随窗口移动:', { from: [petX, petY], to: [newX, newY] });
-          }
-        } else {
-          // 窗口已关闭或不可见，宠物返回原位置
-          console.log('吸附窗口已关闭，宠物返回原位置');
-          returnToOriginalPosition();
-        }
-      } catch (error) {
-        console.error('检查吸附窗口状态失败:', error);
-        // 出错时也返回原位置
-        returnToOriginalPosition();
-      }
-    }
-  }, 100); // 每100ms检查一次
+  // 由于只进行屏幕边缘吸附，不再需要窗口跟随功能
+  // 保留函数结构以便将来扩展
+  console.log('窗口跟随功能已禁用，只进行屏幕边缘吸附');
 }
 
-// 宠物返回原位置的函数
-function returnToOriginalPosition() {
-  if (petWindow && !petWindow.isDestroyed()) {
-    try {
-      const { screen } = require('electron');
-      const primaryDisplay = screen.getPrimaryDisplay();
-      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+// 清除吸附状态的函数
+function clearSnapState() {
+  console.log('清除吸附状态');
+  isSnapped = false;
+  snapInfo = {
+    type: '',
+    position: null,
+    attachedWindow: null
+  };
 
-      const [petWidth, petHeight] = petWindow.getSize();
-      const targetX = screenWidth - 120;
-      const targetY = screenHeight - 120;
-
-      // 清除吸附状态
-      delete petWindow.attachedToWindow;
-
-      // 通知渲染进程开始返回动画
-      petWindow.webContents.send('return-to-original');
-
-      // 使用动画返回原位置
-      animateToPosition(petWindow, targetX, targetY);
-
-    } catch (error) {
-      console.error('返回原位置失败:', error);
-    }
+  if (petWindow && petWindow.attachedToWindow) {
+    delete petWindow.attachedToWindow;
   }
-}
-
-// 动画移动到指定位置的函数
-function animateToPosition(window, targetX, targetY, duration = 1000) {
-  const [startX, startY] = window.getPosition();
-  const startTime = Date.now();
-
-  function animate() {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-
-    // 使用缓动函数
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
-
-    const currentX = startX + (targetX - startX) * easeProgress;
-    const currentY = startY + (targetY - startY) * easeProgress;
-
-    window.setPosition(Math.round(currentX), Math.round(currentY));
-
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    } else {
-      console.log('宠物已返回原位置');
-      // 通知渲染进程动画完成
-      window.webContents.send('return-completed');
-    }
-  }
-
-  animate();
 }
