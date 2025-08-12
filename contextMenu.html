@@ -97,6 +97,11 @@
             <span>打开地图</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="showTravelStatus">
+            <span>🌤️</span>
+            <span>旅行状态</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item transparency-control" id="transparencyControl">
             <span>🎨</span>
             <span>透明度调节</span>
@@ -160,6 +165,18 @@
                     window.close();
                 } catch (error) {
                     console.error('Error opening map window:', error);
+                }
+            });
+
+            // 显示旅行状态
+            const showTravelStatus = document.getElementById('showTravelStatus');
+            showTravelStatus.addEventListener('click', () => {
+                console.log('Show travel status clicked');
+                try {
+                    ipcRenderer.send('show-travel-status');
+                    window.close();
+                } catch (error) {
+                    console.error('Error showing travel status:', error);
                 }
             });
 

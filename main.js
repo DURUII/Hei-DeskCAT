@@ -6,6 +6,7 @@ const path = require('path');
 const { ActivityMonitor, setCreatePetStatusWindowFunction } = require('./activityMonitor');
 const { analyzeScreenshot, generateFunReminder, generateJourneyStatus } = require('./aiService');
 const AMapService = require('./amapService');
+const weatherService = require('./weatherService');
 
 // 禁用GPU加速以解决Passthrough错误
 app.disableHardwareAcceleration();
@@ -46,6 +47,17 @@ const PET_STATE_DURATION = 5000; // 状态持续时间（毫秒）
 
 // 全局旅行数据
 let globalTravelData = null;
+
+// 旅行状态管理
+let currentTravelStatus = {
+  isInProgress: false,
+  currentLocation: null,
+  currentWeather: null,
+  lastCity: null,
+  totalDistance: 0,
+  traveledDistance: 0,
+  progress: 0
+};
 
 // 小旅星窗口管理
 let petStatusWindow = null;
@@ -319,6 +331,119 @@ function createPetWindow() {
     };
     console.log('当前桌宠状态:', stateInfo);
     event.reply('pet-state-info', stateInfo);
+  });
+
+  // 监听旅行位置更新事件
+  ipcMain.on('travel-position-update', async (event, data) => {
+    try {
+      // console.log('Travel position update received:', data);
+
+      // 更新当前位置
+      if (data.lng && data.lat) {
+        currentTravelStatus.currentLocation = { lng: data.lng, lat: data.lat };
+        currentTravelStatus.progress = data.progress || 0;
+
+        // 设置天气服务的当前位置
+        weatherService.setCurrentLocation(data.lng, data.lat);
+
+        // 获取当前位置的天气信息
+        const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+        currentTravelStatus.currentWeather = weatherInfo;
+
+        // 标记旅行正在进行
+        currentTravelStatus.isInProgress = true;
+      }
+    } catch (error) {
+      console.error('Error updating travel position:', error);
+    }
+  });
+
+  // 监听旅行状态查询事件
+  ipcMain.on('query-travel-status', (event) => {
+    console.log('Travel status requested:', currentTravelStatus);
+    event.reply('travel-status-info', currentTravelStatus);
+  });
+
+  // 监听获取当前天气事件
+  ipcMain.on('get-current-weather', async (event) => {
+    try {
+      const weatherInfo = await weatherService.getCurrentWeather();
+      console.log('Current weather requested:', weatherInfo);
+      event.reply('current-weather-info', weatherInfo);
+    } catch (error) {
+      console.error('Error getting current weather:', error);
+      event.reply('current-weather-info', weatherService.getDefaultWeather());
+    }
+  });
+
+  // 监听显示旅行状态事件
+  ipcMain.on('show-travel-status', async (event) => {
+    try {
+      console.log('Show travel status requested');
+
+      if (!currentTravelStatus.isInProgress) {
+        createPetStatusWindow('当前没有进行中的旅行\n按F2截图开始新的旅行！');
+        return;
+      }
+
+      let statusMessage = '🚀 正在旅行中...\n';
+
+      // 添加进度信息
+      if (currentTravelStatus.progress) {
+        statusMessage += `进度：${Math.round(currentTravelStatus.progress)}%\n`;
+      }
+
+      // 添加当前天气信息
+      if (currentTravelStatus.currentWeather) {
+        const weather = currentTravelStatus.currentWeather;
+        statusMessage += `${weather.emoji} ${weather.city}\n`;
+        statusMessage += `${weather.description} ${weather.temperatureText}`;
+
+        if (weather.windpower) {
+          statusMessage += ` | ${weather.windpower}级风`;
+        }
+      } else {
+        // 如果没有天气信息，尝试获取当前天气
+        try {
+          const weatherInfo = await weatherService.getCurrentWeather();
+          if (weatherInfo) {
+            statusMessage += `${weatherInfo.emoji} ${weatherInfo.city}\n`;
+            statusMessage += `${weatherInfo.description} ${weatherInfo.temperatureText}`;
+          }
+        } catch (error) {
+          console.error('Error getting weather for status:', error);
+          statusMessage += '🌤️ 天气信息获取中...';
+        }
+      }
+
+      createPetStatusWindow(statusMessage);
+    } catch (error) {
+      console.error('Error showing travel status:', error);
+      createPetStatusWindow('无法获取旅行状态信息');
+    }
+  });
+
+  // 监听地图天气请求事件
+  ipcMain.on('get-weather-for-coordinates', async (event, data) => {
+    try {
+      if (!data.lng || !data.lat) {
+        console.error('Invalid coordinates for weather request');
+        return;
+      }
+
+      const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+
+      // 发送天气信息回地图窗口
+      if (mapWindow && !mapWindow.isDestroyed()) {
+        mapWindow.webContents.send('weather-info-response', weatherInfo);
+      }
+    } catch (error) {
+      console.error('Error getting weather for map:', error);
+      // 发送默认天气信息
+      if (mapWindow && !mapWindow.isDestroyed()) {
+        mapWindow.webContents.send('weather-info-response', weatherService.getDefaultWeather());
+      }
+    }
   });
 
   // 监听右键菜单关闭事件
@@ -838,7 +963,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   const newContextMenuWindow = new BrowserWindow({
     width: 180,
-    height: 180,
+    height: 220,
     frame: false,
     alwaysOnTop: true,
     transparent: true,
@@ -862,7 +987,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   // 菜单尺寸
   const menuWidth = 180;
-  const menuHeight = 180;
+  const menuHeight = 220;
 
   // 计算最佳位置
   let finalX = x;
@@ -1302,6 +1427,32 @@ ipcMain.on('start-journey', async (event, data) => {
 
     // 保存到全局变量
     globalTravelData = travelData;
+
+    // 初始化旅行状态
+    currentTravelStatus = {
+      isInProgress: true,
+      currentLocation: userLocation.coordinates ? { lng: userLocation.coordinates[0], lat: userLocation.coordinates[1] } : null,
+      currentWeather: null,
+      lastCity: userLocation.city,
+      totalDistance: 0,
+      traveledDistance: 0,
+      progress: 0
+    };
+
+    // 获取起点天气信息
+    if (currentTravelStatus.currentLocation) {
+      try {
+        weatherService.setCurrentLocation(currentTravelStatus.currentLocation.lng, currentTravelStatus.currentLocation.lat);
+        const initialWeather = await weatherService.getWeatherByCoordinates(
+          currentTravelStatus.currentLocation.lng,
+          currentTravelStatus.currentLocation.lat
+        );
+        currentTravelStatus.currentWeather = initialWeather;
+        console.log('Initial weather info:', initialWeather);
+      } catch (error) {
+        console.error('Error getting initial weather:', error);
+      }
+    }
 
     console.log('Creating map window, travel data:', travelData);
     createMapWindow(travelData);
