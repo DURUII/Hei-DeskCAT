@@ -9,10 +9,10 @@ class ActivityMonitor {
     this.lastWaterReminder = Date.now();
     this.lastFunReminder = Date.now();
     this.activityCheckInterval = null;
-    this.inactivityThreshold = 5 * 60 * 1000; // 5分钟(测试用)  // 原来是60分钟
-    this.waterReminderThreshold = 2 * 60 * 1000; // 2分钟(测试用)  // 原来是52分钟
-    this.funReminderThreshold = 4 * 60 * 1000; // 4分钟(测试用)  // 原来是其他时间
-    this.checkInterval = 30 * 1000; // 每30秒检查一次  // 原来是每分钟检查
+    this.inactivityThreshold = 60 * 60 * 1000; // 5分钟(测试用)  // 原来是60分钟
+    this.waterReminderThreshold = 60 * 60 * 1000; // 2分钟(测试用)  // 原来是52分钟
+    this.funReminderThreshold = 60 * 60 * 1000; // 4分钟(测试用)  // 原来是其他时间
+    this.checkInterval = 60 * 1000; // 每30秒检查一次  // 原来是每分钟检查
 
     this.init();
   }

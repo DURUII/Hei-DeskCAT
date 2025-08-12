@@ -35,7 +35,8 @@ function extractFallbackResponse(response) {
     return {
         message: message,
         shouldTravel: shouldTravel,
-        confidence: shouldTravel ? 0.6 : 0.5
+        confidence: shouldTravel ? 0.6 : 0.5,
+        emotion: shouldTravel ? '好棒' : '嘿嘿被夸了'
     };
 }
 
@@ -63,7 +64,8 @@ async function analyzeScreenshot(base64Image) {
                 return {
                     message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
                     shouldTravel: true,
-                    confidence: 0.7
+                    confidence: 0.7,
+                    emotion: "好棒"
                 };
             } else {
                 const nonTravelResponses = [
@@ -74,7 +76,8 @@ async function analyzeScreenshot(base64Image) {
                 return {
                     message: nonTravelResponses[Math.floor(Math.random() * nonTravelResponses.length)],
                     shouldTravel: false,
-                    confidence: 0.6
+                    confidence: 0.6,
+                    emotion: "嘿嘿被夸了"
                 };
             }
         }
@@ -102,20 +105,22 @@ async function analyzeScreenshot(base64Image) {
                     {
                     "message": "你的回应内容",
                     "shouldTravel": true/false,
-                    "confidence": 0.8
+                    "confidence": 0.8,
+                    "emotion": "表情标签"
                     }
 
                     其中：
                     - message: 回应内容（简体中文）
                     - shouldTravel: 是否建议旅行（true/false）
-                    - confidence: 分析置信度（0.0-1.0）`
+                    - confidence: 分析置信度（0.0-1.0）
+                    - emotion: 表情标签，根据截图内容选择最合适的表情，可选值：好棒（开心夸奖）、嘿嘿被夸了（害羞开心）、给你花花（友好送花）、有瓜让我听听（好奇八卦）、猫头偷看（偷偷观察）、思考并怀疑（思考状态）、好复杂（困惑）、馋得流口水（想吃东西）、生气替你出头（愤怒保护）、哼不理你了（傲娇）、玩手机（专注玩手机）、困死了（困倦）`
                 },
                 {
                     role: "user",
                     content: [
                         {
                             type: "text",
-                            text: "我刚截了一张图，快看？按照要求回答哦。"
+                            text: `我刚截了一张图，现在是${new Date().toLocaleString('zh-CN')}，你能看出这是什么吗？请分析并按照指定格式回复。`
                         },
                         {
                             type: "image_url",
@@ -143,12 +148,14 @@ async function analyzeScreenshot(base64Image) {
             // 验证响应格式
             if (typeof parsedResponse.message === 'string' &&
                 typeof parsedResponse.shouldTravel === 'boolean' &&
-                typeof parsedResponse.confidence === 'number') {
+                typeof parsedResponse.confidence === 'number' &&
+                typeof parsedResponse.emotion === 'string') {
 
                 const result = {
                     message: parsedResponse.message,
                     shouldTravel: parsedResponse.shouldTravel,
-                    confidence: parsedResponse.confidence
+                    confidence: parsedResponse.confidence,
+                    emotion: parsedResponse.emotion
                 };
                 console.log('Valid JSON response:', result);
                 return result;
@@ -178,7 +185,8 @@ async function analyzeScreenshot(base64Image) {
             return {
                 message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
                 shouldTravel: true,
-                confidence: 0.5
+                confidence: 0.5,
+                emotion: "好棒"
             };
         } else {
             const nonTravelResponses = [
@@ -189,7 +197,8 @@ async function analyzeScreenshot(base64Image) {
             return {
                 message: nonTravelResponses[Math.floor(Math.random() * nonTravelResponses.length)],
                 shouldTravel: false,
-                confidence: 0.4
+                confidence: 0.4,
+                emotion: "嘿嘿被夸了"
             };
         }
     }
