@@ -30,6 +30,9 @@ let transparencyWindow = null; // 添加右键菜单窗口跟踪
 // 拖动相关变量
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
+
+// 全局旅行数据
+let globalTravelData = null;
 let activityMonitor;
 let amapService;
 
@@ -574,6 +577,30 @@ function createPetWindow() {
     }
   });
 
+  // 监听打开地图窗口请求
+  ipcMain.on('open-map-window', (event) => {
+    console.log('Opening map window from context menu');
+    try {
+      if (mapWindow && !mapWindow.isDestroyed()) {
+        mapWindow.show();
+        mapWindow.focus();
+      } else {
+        // 检查是否有旅行数据
+        if (globalTravelData && globalTravelData.origin && globalTravelData.destination) {
+          // 有旅行数据，创建地图窗口
+          createMapWindow(globalTravelData);
+        } else {
+          // 没有旅行数据，显示状态提醒
+          console.log('No travel data available, showing status reminder');
+          const reminderMessage = '还没有设置目的地，请按F2截图触发旅行！';
+          createPetStatusWindow(reminderMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Error opening map window:', error);
+    }
+  });
+
   // 监听关闭右键菜单事件
   ipcMain.on('close-context-menu', (event) => {
     console.log('Closing context menu from external request');
@@ -672,7 +699,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   const newContextMenuWindow = new BrowserWindow({
     width: 180,
-    height: 140,
+    height: 180,
     frame: false,
     alwaysOnTop: true,
     transparent: true,
@@ -696,7 +723,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   // 菜单尺寸
   const menuWidth = 180;
-  const menuHeight = 100;
+  const menuHeight = 180;
 
   // 计算最佳位置
   let finalX = x;
@@ -796,6 +823,14 @@ function setupGlobalClickHandler() {
 function createMapWindow(travelData = { origin: '武汉光谷', destination: '北京天安门' }) {
   console.log('Creating map window, travel data:', travelData);
 
+  // 检查是否已存在地图窗口
+  if (mapWindow && !mapWindow.isDestroyed()) {
+    console.log('Map window already exists, showing and focusing');
+    mapWindow.show();
+    mapWindow.focus();
+    return mapWindow;
+  }
+
   // 清理旅行数据中的乱码字符
   const cleanTravelData = {
     origin: cleanText(travelData.origin) || '武汉光谷',
@@ -803,31 +838,38 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     userLocation: travelData.userLocation || null
   };
 
+  // 保存到全局变量
+  globalTravelData = cleanTravelData;
+
   console.log('Cleaned travel data:', cleanTravelData);
 
   mapWindow = new BrowserWindow({
-    width: 300,
-    height: 200,
+    width: 800,
+    height: 600,
     frame: false,
-    alwaysOnTop: true,
-    transparent: false, // 禁用透明度以提高兼容性
+    alwaysOnTop: false, // 与主页面保持一致
+    transparent: false,
+    resizable: true, // 允许调整大小
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     },
-    movable: true // 允许窗口移动
+    movable: true, // 允许窗口移动
+    minimizable: true, // 允许最小化
+    maximizable: true, // 允许最大化
+    show: false // 初始不显示，等待加载完成后显示
   });
 
   mapWindow.loadFile('map.html');
 
-  // 设置地图窗口位置到屏幕右上角
+  // 设置地图窗口位置到屏幕中央
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
   mapWindow.setPosition(
-    width - 310,
-    50
+    Math.round((width - 800) / 2),
+    Math.round((height - 600) / 2)
   );
 
   // 通过IPC将高德地图API Key和旅行信息传递给地图窗口
@@ -844,6 +886,22 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     setTimeout(() => {
       mapWindow.webContents.send('travel-info', cleanTravelData);
     }, 1000);
+
+    // 显示窗口
+    mapWindow.show();
+  });
+
+  // 监听地图窗口关闭事件，改为隐藏而不是销毁
+  mapWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mapWindow.hide();
+      console.log('Map window hidden instead of closed');
+    } else {
+      // 应用退出时清理全局变量
+      globalTravelData = null;
+      console.log('App quitting, clearing global travel data');
+    }
   });
 
   // 监听地图窗口请求旅行信息
@@ -851,6 +909,14 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     console.log('Map window requesting travel info');
     if (mapWindow && !mapWindow.isDestroyed()) {
       mapWindow.webContents.send('travel-info', cleanTravelData);
+    }
+  });
+
+  // 监听地图窗口隐藏请求
+  ipcMain.on('hide-map-window', () => {
+    console.log('Hiding map window');
+    if (mapWindow && !mapWindow.isDestroyed()) {
+      mapWindow.hide();
     }
   });
 
@@ -1122,6 +1188,9 @@ ipcMain.on('start-journey', async (event, data) => {
       userLocation: userLocation
     };
 
+    // 保存到全局变量
+    globalTravelData = travelData;
+
     console.log('Creating map window, travel data:', travelData);
     createMapWindow(travelData);
   } catch (error) {
@@ -1132,6 +1201,9 @@ ipcMain.on('start-journey', async (event, data) => {
       origin: '武汉光谷',
       destination: destination
     };
+
+    // 保存到全局变量
+    globalTravelData = travelData;
 
     console.log('Using default location to create map window, travel data:', travelData);
     createMapWindow(travelData);

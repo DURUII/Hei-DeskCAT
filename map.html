@@ -17,6 +17,15 @@
             border: 1px solid #eee;
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
             -webkit-app-region: drag;
+            user-select: none;
+            /* 防止文本选择 */
+        }
+
+        /* 屏蔽系统右键菜单 */
+        body {
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .map-container {
@@ -96,6 +105,39 @@
         .location-info .current {
             color: #4a6cf7;
             font-weight: bold;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            color: #666;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            z-index: 20;
+            -webkit-app-region: no-drag;
+        }
+
+        .close-button:hover {
+            background: rgba(255, 255, 255, 1);
+            color: #e74c3c;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transform: scale(1.1);
+        }
+
+        .close-button:active {
+            transform: scale(0.95);
         }
 
         .header {
@@ -260,7 +302,7 @@
     <div class="drag-handle" id="dragHandle"></div>
 
     <div class="map-container">
-        <button class="close-btn" id="closeBtn">×</button>
+        <div class="close-button" id="closeBtn">×</div>
 
         <div class="header">
             <span id="time-icon">🌞</span>
@@ -306,6 +348,19 @@
     </div>
 
     <script>
+        // 屏蔽系统右键菜单
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        // 屏蔽文本选择
+        document.addEventListener('selectstart', (e) => {
+            e.preventDefault();
+            return false;
+        });
+
         const closeBtn = document.getElementById('closeBtn');
         const progress = document.getElementById('progress');
         const timeIcon = document.getElementById('time-icon');
@@ -341,7 +396,13 @@
         let traveledDistance = 0;
 
         closeBtn.addEventListener('click', () => {
-            window.close();
+            try {
+                require('electron').ipcRenderer.send('hide-map-window');
+            } catch (error) {
+                console.error('Error hiding map window:', error);
+                // 如果IPC失败，则直接关闭窗口
+                window.close();
+            }
         });
 
         // 缩放控件事件监听
