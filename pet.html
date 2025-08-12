@@ -71,24 +71,54 @@
 
         /* 吸附动画 */
         @keyframes snap-bounce {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
 
         @keyframes snap-scale {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
 
         /* 返回动画 */
         @keyframes return-walk {
-            0% { transform: scale(1) translateX(0); }
-            25% { transform: scale(1.1) translateX(-5px); }
-            50% { transform: scale(1) translateX(0); }
-            75% { transform: scale(1.1) translateX(5px); }
-            100% { transform: scale(1) translateX(0); }
+            0% {
+                transform: scale(1) translateX(0);
+            }
+
+            25% {
+                transform: scale(1.1) translateX(-5px);
+            }
+
+            50% {
+                transform: scale(1) translateX(0);
+            }
+
+            75% {
+                transform: scale(1.1) translateX(5px);
+            }
+
+            100% {
+                transform: scale(1) translateX(0);
+            }
         }
     </style>
 </head>
@@ -124,7 +154,7 @@
         function updateDefaultEmotion() {
             const now = new Date();
             const hour = now.getHours();
-            
+
             if (hour >= 18) { // 晚上6点后
                 petImage.src = 'assets/imgs/罗小黑的生活/困死了.gif';
                 console.log('晚上时间，切换到困死了.gif');
@@ -175,70 +205,113 @@
             if (!isDragging) {
                 console.log('Pet clicked');
                 // 这里可以添加点击宠物时的其他功能
+            } else {
+                console.log('Click ignored during dragging');
             }
         });
 
-        // 拖拽功能 - 实现跟手拖拽
+        // 拖拽功能 - 优化后的跟手拖拽
         let isDragging = false;
-        let dragStartPos = { x: 0, y: 0 };
-        let windowStartPos = { x: 0, y: 0 };
+        let lastMouseX = 0, lastMouseY = 0; // 上一次鼠标位置
+        let offsetX, offsetY; // 鼠标在窗口内的偏移位置
+        let lastMoveTime = 0; // 上次移动时间
+        const moveThreshold = 1; // 移动阈值（像素）
         let isFlipped = false; // 记录翻转状态
 
         // 整个宠物容器都可以拖拽
         pet.addEventListener('mousedown', (e) => {
             // 只有左键拖拽
             if (e.button !== 0) return;
-            
+
+            e.preventDefault(); // 防止默认行为
             isDragging = true;
-            dragStartPos = { x: e.clientX, y: e.clientY };
-            
-            // 获取窗口当前位置
-            try {
-                require('electron').ipcRenderer.send('get-pet-window-position');
-            } catch (error) {
-                console.error('获取窗口位置失败:', error);
-            }
-            
+
+            // 记录鼠标在窗口内的点击位置
+            offsetX = e.clientX;
+            offsetY = e.clientY;
+
+            // 记录当前鼠标屏幕位置
+            lastMouseX = e.screenX;
+            lastMouseY = e.screenY;
+            lastMoveTime = Date.now();
+
             // 开始拖拽时重置翻转状态
             if (isFlipped) {
                 isFlipped = false;
                 pet.style.transform = 'scale(1)';
                 console.log('拖拽开始，重置翻转状态');
             }
-            
+
             pet.style.cursor = 'grabbing';
-            e.preventDefault();
-            
+
+            // 通知主进程开始拖动，并传递偏移量
+            try {
+                require('electron').ipcRenderer.send('drag-start', { offsetX, offsetY });
+            } catch (error) {
+                console.error('发送拖动开始信号失败:', error);
+            }
+
             console.log('开始拖拽宠物');
         });
 
+        // 鼠标移动事件
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            
-            const deltaX = e.clientX - dragStartPos.x;
-            const deltaY = e.clientY - dragStartPos.y;
-            
-            // 计算新位置
-            const newX = windowStartPos.x + deltaX;
-            const newY = windowStartPos.y + deltaY;
-            
-            // 使用 IPC 方式移动窗口到新位置
-            try {
-                require('electron').ipcRenderer.send('set-pet-window-position', newX, newY);
-            } catch (error) {
-                console.error('设置窗口位置失败:', error);
+
+            // 计算鼠标移动距离
+            const deltaX = e.screenX - lastMouseX;
+            const deltaY = e.screenY - lastMouseY;
+
+            // 检查是否移动超过阈值，并且最小时间间隔
+            const now = Date.now();
+            const timeDelta = now - lastMoveTime;
+
+            if ((Math.abs(deltaX) > moveThreshold || Math.abs(deltaY) > moveThreshold) && timeDelta > 16) {
+                // 更新上次移动时间
+                lastMoveTime = now;
+
+                // 更新上次鼠标位置
+                lastMouseX = e.screenX;
+                lastMouseY = e.screenY;
+
+                // 直接发送鼠标的绝对位置给主进程
+                try {
+                    require('electron').ipcRenderer.send('move-pet-absolute', {
+                        mouseX: e.screenX,
+                        mouseY: e.screenY
+                    });
+                } catch (error) {
+                    console.error('发送鼠标位置失败:', error);
+                }
             }
         });
 
+        // 鼠标释放事件
         document.addEventListener('mouseup', () => {
             if (isDragging) {
+                console.log('结束拖拽宠物');
                 isDragging = false;
                 pet.style.cursor = 'pointer';
-                console.log('结束拖拽宠物');
-                
-                // 发送拖拽结束信号，触发边缘吸附
+
+                // 通知主进程结束拖动
                 try {
-                    ipcRenderer.send('drag-end');
+                    require('electron').ipcRenderer.send('drag-end');
+                } catch (error) {
+                    console.error('发送拖拽结束信号失败:', error);
+                }
+            }
+        });
+
+        // 确保鼠标离开窗口时也能正确处理拖动结束
+        document.addEventListener('mouseleave', () => {
+            if (isDragging) {
+                console.log('鼠标离开窗口，结束拖拽');
+                isDragging = false;
+                pet.style.cursor = 'pointer';
+
+                // 通知主进程结束拖动
+                try {
+                    require('electron').ipcRenderer.send('drag-end');
                 } catch (error) {
                     console.error('发送拖拽结束信号失败:', error);
                 }
@@ -252,19 +325,19 @@
             }
         });
 
-        // 监听窗口位置更新
+        // 监听窗口位置更新（保留用于其他功能）
         const { ipcRenderer } = require('electron');
         ipcRenderer.on('pet-window-position', (event, x, y) => {
-            windowStartPos = { x, y };
+            // 保留此监听器用于其他功能，但不再用于拖动
         });
 
         // 监听边缘吸附完成事件
         ipcRenderer.on('snap-completed', (event, x, y, snapType, shouldFlip) => {
             console.log('边缘吸附完成:', x, y, snapType, shouldFlip);
-            
-            // 更新本地窗口位置记录
-            windowStartPos = { x, y };
-            
+
+            // 更新本地窗口位置记录（如果需要的话）
+            // windowStartPos = { x, y }; // 已移除，不再需要
+
             // 处理翻转
             if (shouldFlip) {
                 isFlipped = true;
@@ -273,11 +346,11 @@
             } else {
                 isFlipped = false;
             }
-            
+
             // 添加吸附完成的视觉反馈和动画
             pet.style.transform = shouldFlip ? 'scale(1.1) scaleY(-1)' : 'scale(1.1)';
             pet.style.transition = 'transform 0.2s ease-out';
-            
+
             // 吸附动画效果
             if (snapType.includes('的')) {
                 // 窗口吸附：添加弹跳动画
@@ -286,10 +359,10 @@
                 // 屏幕边缘吸附：添加缩放动画
                 pet.style.animation = 'snap-scale 0.4s ease-out';
             }
-            
+
             // 显示吸附类型提示
             showSnapTip(snapType);
-            
+
             setTimeout(() => {
                 pet.style.transform = shouldFlip ? 'scale(1) scaleY(-1)' : 'scale(1)';
                 pet.style.transition = 'transform 0.1s ease-in';
@@ -300,16 +373,16 @@
         // 监听返回原位置事件
         ipcRenderer.on('return-to-original', (event) => {
             console.log('开始返回原位置');
-            
+
             // 重置翻转状态
             if (isFlipped) {
                 isFlipped = false;
                 pet.style.transform = 'scale(1)';
             }
-            
+
             // 显示返回提示
             showReturnTip();
-            
+
             // 添加返回动画效果
             pet.style.animation = 'return-walk 1s ease-in-out';
         });
@@ -317,10 +390,10 @@
         // 监听返回完成事件
         ipcRenderer.on('return-completed', (event) => {
             console.log('返回原位置完成');
-            
+
             // 清除动画
             pet.style.animation = '';
-            
+
             // 显示返回完成提示
             showReturnCompletedTip();
         });
@@ -332,12 +405,12 @@
             if (existingTip) {
                 existingTip.remove();
             }
-            
+
             // 创建提示元素
             const tip = document.createElement('div');
             tip.className = 'snap-tip';
             tip.textContent = `已吸附到${type}`;
-            
+
             // 根据吸附类型设置不同的颜色
             let tipColor = 'rgba(0, 0, 0, 0.8)';
             if (type.includes('的')) {
@@ -347,7 +420,7 @@
                 // 顶部吸附用橙色（翻转提示）
                 tipColor = 'rgba(255, 140, 0, 0.9)';
             }
-            
+
             tip.style.cssText = `
                 position: absolute;
                 top: -30px;
@@ -364,14 +437,14 @@
                 transition: opacity 0.3s ease;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             `;
-            
+
             pet.appendChild(tip);
-            
+
             // 显示提示
             setTimeout(() => {
                 tip.style.opacity = '1';
             }, 10);
-            
+
             // 3秒后隐藏提示
             setTimeout(() => {
                 tip.style.opacity = '0';
@@ -389,7 +462,7 @@
             if (existingTip) {
                 existingTip.remove();
             }
-            
+
             const tip = document.createElement('div');
             tip.className = 'return-tip';
             tip.textContent = '窗口已关闭，正在返回原位置...';
@@ -409,9 +482,9 @@
                 transition: opacity 0.3s ease;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             `;
-            
+
             pet.appendChild(tip);
-            
+
             setTimeout(() => {
                 tip.style.opacity = '1';
             }, 10);
@@ -423,7 +496,7 @@
             if (existingTip) {
                 existingTip.remove();
             }
-            
+
             const tip = document.createElement('div');
             tip.className = 'return-completed-tip';
             tip.textContent = '已返回原位置';
@@ -443,13 +516,13 @@
                 transition: opacity 0.3s ease;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             `;
-            
+
             pet.appendChild(tip);
-            
+
             setTimeout(() => {
                 tip.style.opacity = '1';
             }, 10);
-            
+
             setTimeout(() => {
                 tip.style.opacity = '0';
                 setTimeout(() => {
