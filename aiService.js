@@ -88,7 +88,7 @@ async function analyzeScreenshot(base64Image) {
         console.log("Sending request to AI service...");
         console.log("Model:", "qwen-vl-plus");
         console.log("Image size:", base64Image.length, "characters");
-        
+
         const completion = await openai.chat.completions.create({
             model: "qwen-vl-plus",
             messages: [
@@ -98,8 +98,9 @@ async function analyzeScreenshot(base64Image) {
 
                     分析规则：
                     1. 如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
-                    2. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等
-                    3. 回应应该简短、有趣且富有想象力，不超过20个字
+                    2. 如果建议旅行，回应内容中包含且仅包含旅行目的地，不要包含其他内容，目的地包含城市和景点名
+                    3. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等
+                    4. 回应应该简短、有趣且富有想象力，不超过20个字
 
                     请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等markdown关键字：
                     {
@@ -134,7 +135,7 @@ async function analyzeScreenshot(base64Image) {
             max_tokens: 200,
             temperature: 0.5
         });
-        
+
         console.log("AI service response received successfully");
 
         const aiResponse = completion.choices[0].message.content.trim();
