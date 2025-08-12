@@ -33,6 +33,9 @@ let dragOffset = { x: 0, y: 0 };
 
 // 全局旅行数据
 let globalTravelData = null;
+
+// 小旅星窗口管理
+let petStatusWindow = null;
 let activityMonitor;
 let amapService;
 
@@ -609,6 +612,14 @@ function createPetWindow() {
     }
   });
 
+  // 监听关闭小旅星窗口事件
+  ipcMain.on('close-pet-status-window', (event) => {
+    console.log('Closing pet status window from external request');
+    if (petStatusWindow && !petStatusWindow.isDestroyed()) {
+      petStatusWindow.close();
+    }
+  });
+
   // 设置窗口移动监听器
   setupWindowMoveListener();
 
@@ -617,12 +628,26 @@ function createPetWindow() {
 
 // 创建宠物状态弹窗窗口
 function createPetStatusWindow(message) {
-  const statusWindow = new BrowserWindow({
+  console.log('Creating pet status window with message:', message);
+
+  // 关闭已存在的小旅星窗口
+  if (petStatusWindow && !petStatusWindow.isDestroyed()) {
+    console.log('Closing existing pet status window');
+    try {
+      petStatusWindow.close();
+      petStatusWindow = null;
+    } catch (error) {
+      console.error('Error closing existing pet status window:', error);
+      petStatusWindow = null;
+    }
+  }
+
+  const newPetStatusWindow = new BrowserWindow({
     width: 220,
     height: 120,
     frame: false,
     alwaysOnTop: true,
-    transparent: false,
+    transparent: true,
     resizable: false,
     skipTaskbar: true,
     webPreferences: {
@@ -631,56 +656,104 @@ function createPetStatusWindow(message) {
       enableRemoteModule: true
     },
     movable: false,
-    focusable: false
+    focusable: true,
+    hasShadow: false
   });
 
-  statusWindow.loadFile('petStatus.html');
+  newPetStatusWindow.loadFile('petStatus.html');
 
-  // 设置弹窗位置在宠物窗口上方
+  // 智能计算弹窗位置，避免被桌面边框遮挡
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
-  // 获取宠物窗口位置
-  const petPosition = petWindow ? petWindow.getPosition() : [width - 120, height - 120];
+  // 获取宠物窗口位置和大小
+  const petPosition = petWindow ? petWindow.getPosition() : [screenWidth - 120, screenHeight - 120];
+  const petSize = petWindow ? petWindow.getSize() : [60, 60];
 
-  statusWindow.setPosition(
-    petPosition[0] - 60, // 居中显示
-    petPosition[1] - 140 // 在宠物上方
-  );
+  // 气泡窗口的尺寸
+  const bubbleWidth = 220;
+  const bubbleHeight = 120;
+  const bubbleTailHeight = 16; // 尾巴的高度
 
-  // 通过IPC传递消息
-  statusWindow.webContents.once('dom-ready', () => {
+  // 计算最佳位置
+  let bubbleX, bubbleY, bubbleDirection;
+
+  // 优先尝试上方位置
+  if (petPosition[1] >= bubbleHeight + bubbleTailHeight + 10) {
+    // 上方有足够空间
+    bubbleX = petPosition[0] + (petSize[0] / 2) - (bubbleWidth / 2);
+    bubbleY = petPosition[1] - bubbleHeight - bubbleTailHeight;
+    bubbleDirection = 'top';
+  } else if (petPosition[1] + petSize[1] + bubbleHeight + bubbleTailHeight <= screenHeight) {
+    // 下方有足够空间
+    bubbleX = petPosition[0] + (petSize[0] / 2) - (bubbleWidth / 2);
+    bubbleY = petPosition[1] + petSize[1] + bubbleTailHeight;
+    bubbleDirection = 'bottom';
+  } else if (petPosition[0] >= bubbleWidth + bubbleTailHeight + 10) {
+    // 左侧有足够空间
+    bubbleX = petPosition[0] - bubbleWidth - bubbleTailHeight;
+    bubbleY = petPosition[1] + (petSize[1] / 2) - (bubbleHeight / 2);
+    bubbleDirection = 'left';
+  } else if (petPosition[0] + petSize[0] + bubbleWidth + bubbleTailHeight <= screenWidth) {
+    // 右侧有足够空间
+    bubbleX = petPosition[0] + petSize[0] + bubbleTailHeight;
+    bubbleY = petPosition[1] + (petSize[1] / 2) - (bubbleHeight / 2);
+    bubbleDirection = 'right';
+  } else {
+    // 如果所有方向都没有足够空间，强制显示在上方
+    bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, petPosition[0] + (petSize[0] / 2) - (bubbleWidth / 2)));
+    bubbleY = Math.max(10, petPosition[1] - bubbleHeight - bubbleTailHeight);
+    bubbleDirection = 'top';
+  }
+
+  // 确保气泡不会超出屏幕边界
+  bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, bubbleX));
+  bubbleY = Math.max(10, Math.min(screenHeight - bubbleHeight - 10, bubbleY));
+
+  console.log(`Positioning bubble at (${bubbleX}, ${bubbleY}) with direction: ${bubbleDirection}`);
+  newPetStatusWindow.setPosition(Math.round(bubbleX), Math.round(bubbleY));
+
+  // 通过IPC传递消息和气泡方向
+  newPetStatusWindow.webContents.once('dom-ready', () => {
     try {
-      console.log('Sending message to status window:', message);
-      statusWindow.webContents.send('update-status-message', message);
+      console.log('Sending message and direction to status window:', message, bubbleDirection);
+      newPetStatusWindow.webContents.send('update-status-message', message);
+      newPetStatusWindow.webContents.send('set-bubble-direction', bubbleDirection);
     } catch (error) {
       console.error('Error sending message to status window:', error);
     }
   });
 
   // 监听窗口错误
-  statusWindow.webContents.on('crashed', () => {
+  newPetStatusWindow.webContents.on('crashed', () => {
     console.error('Status window crashed');
+    petStatusWindow = null;
   });
 
-  statusWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+  newPetStatusWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('Status window failed to load:', errorCode, errorDescription);
+    petStatusWindow = null;
   });
 
-  // 3秒后自动关闭
-  setTimeout(() => {
-    try {
-      if (statusWindow && !statusWindow.isDestroyed()) {
-        console.log('Auto-closing status window');
-        statusWindow.close();
-      }
-    } catch (error) {
-      console.error('Error closing status window:', error);
-    }
-  }, 3000);
+  // 监听窗口关闭事件
+  newPetStatusWindow.on('closed', () => {
+    console.log('Pet status window closed');
+    petStatusWindow = null;
+  });
 
-  return statusWindow;
+  // 监听窗口失去焦点事件（点击外部关闭）
+  newPetStatusWindow.on('blur', () => {
+    console.log('Pet status window lost focus, closing');
+    if (newPetStatusWindow && !newPetStatusWindow.isDestroyed()) {
+      newPetStatusWindow.close();
+    }
+  });
+
+  // 保存到全局变量
+  petStatusWindow = newPetStatusWindow;
+
+  return newPetStatusWindow;
 }
 
 // 创建右键菜单窗口
