@@ -134,12 +134,8 @@ function createPetWindow() {
 
   // 监听宠物点击事件
   ipcMain.on('pet-clicked', (event, message) => {
-    console.log('Pet clicked, showing status window with message:', message);
-    try {
-      createPetStatusWindow(message);
-    } catch (error) {
-      console.error('Error creating pet status window:', error);
-    }
+    console.log('Pet clicked, message:', message);
+    // 点击时不再显示气泡弹窗，只记录日志
   });
 
   // 监听打开主窗口事件
@@ -729,40 +725,219 @@ function createBubbleWindow(message) {
 
 // 创建喝水提醒窗口
 function createWaterReminderWindow() {
-  if (waterReminderWindow) {
-    waterReminderWindow.focus();
-    return;
+  if (waterReminderWindow && !waterReminderWindow.isDestroyed()) {
+    waterReminderWindow.close();
   }
 
   waterReminderWindow = new BrowserWindow({
     width: 300,
-    height: 200,
+    height: 150,
     frame: false,
     alwaysOnTop: true,
-    transparent: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
-    }
+    },
+    movable: false,
+    focusable: false
   });
 
   waterReminderWindow.loadFile('waterReminder.html');
 
-  // 设置窗口位置到屏幕中央
+  // 设置弹窗位置在屏幕右上角
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
-  waterReminderWindow.setPosition(
-    Math.floor((width - 300) / 2),
-    Math.floor((height - 200) / 2)
-  );
+  waterReminderWindow.setPosition(width - 320, 20);
 
-  waterReminderWindow.on('closed', () => {
-    waterReminderWindow = null;
-  });
+  // 5秒后自动关闭
+  setTimeout(() => {
+    if (waterReminderWindow && !waterReminderWindow.isDestroyed()) {
+      waterReminderWindow.close();
+    }
+  }, 5000);
 
   return waterReminderWindow;
+}
+
+// 创建气泡弹窗窗口
+function createBubbleWindow(message, type = 'info') {
+  const bubbleWindow = new BrowserWindow({
+    width: 250,
+    height: 80,
+    frame: false,
+    alwaysOnTop: true,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    },
+    movable: false,
+    focusable: false
+  });
+
+  // 根据类型设置不同的样式
+  let backgroundColor = '#4CAF50'; // 默认绿色
+  let icon = '💧';
+  
+  if (type === 'water') {
+    backgroundColor = '#2196F3'; // 蓝色
+    icon = '💧';
+  } else if (type === 'fun') {
+    backgroundColor = '#FF9800'; // 橙色
+    icon = '🎉';
+  } else if (type === 'journey') {
+    backgroundColor = '#9C27B0'; // 紫色
+    icon = '✈️';
+  }
+
+  // 创建HTML内容
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Bubble</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                overflow: hidden;
+                font-family: 'Microsoft YaHei', sans-serif;
+            }
+            .bubble {
+                background: ${backgroundColor};
+                color: white;
+                padding: 15px;
+                border-radius: 20px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                animation: slideIn 0.5s ease-out;
+            }
+            .icon {
+                font-size: 24px;
+                flex-shrink: 0;
+            }
+            .message {
+                font-size: 14px;
+                line-height: 1.4;
+                flex: 1;
+            }
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 1;
+                }
+            }
+            .slide-out {
+                animation: slideOut 0.5s ease-in forwards;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="bubble" id="bubble">
+            <div class="icon">${icon}</div>
+            <div class="message">${message}</div>
+        </div>
+        <script>
+            // 3秒后自动关闭
+            setTimeout(() => {
+                const bubble = document.getElementById('bubble');
+                bubble.classList.add('slide-out');
+                setTimeout(() => {
+                    window.close();
+                }, 500);
+            }, 3000);
+        </script>
+    </body>
+    </html>
+    `;
+
+  bubbleWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+
+  // 设置弹窗位置在屏幕右上角
+  const { screen } = require('electron');
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
+  bubbleWindow.setPosition(width - 270, 20);
+
+  // 4秒后自动关闭（给动画留出时间）
+  setTimeout(() => {
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.close();
+    }
+  }, 4000);
+
+  return bubbleWindow;
+}
+
+// 处理旅程启动逻辑
+async function handleJourneyStart(data) {
+  console.log('Starting journey to:', data.destination);
+
+  // 提取目的地信息（从AI回复中提取地点名）
+  let destination = '北京天安门';
+  if (data.destination) {
+    // 尝试从"替你去看[地点]？"格式中提取地点
+    const match = data.destination.match(/替你去看(.+)[？\?]/);
+    if (match && match[1]) {
+      destination = match[1];
+    } else {
+      destination = data.destination;
+    }
+  }
+
+  try {
+    // 获取用户当前位置作为起点
+    console.log('Getting user current location...');
+    const userLocation = await amapService.getUserLocationDetails();
+    console.log('User location info:', userLocation);
+
+    // 创建地图窗口并传递旅行数据
+    const travelData = {
+      origin: `${userLocation.city}`,
+      destination: destination,
+      userLocation: userLocation
+    };
+
+    console.log('Creating map window, travel data:', travelData);
+    createMapWindow(travelData);
+  } catch (error) {
+    console.error('Failed to get user location, using default location:', error);
+
+    // 如果获取用户位置失败，使用默认位置
+    const travelData = {
+      origin: '武汉光谷',
+      destination: destination
+    };
+
+    console.log('Using default location to create map window, travel data:', travelData);
+    createMapWindow(travelData);
+  }
 }
 
 // 截取屏幕截图
@@ -818,23 +993,22 @@ function registerScreenshotListener() {
       const aiResponse = await captureScreenshot();
       console.log('AI analysis result:', aiResponse);
 
-      // 使用Windows原生通知显示AI回复
-      const notification = {
-        title: 'DeskTripper',
-        body: aiResponse.message,
-        icon: path.join(__dirname, 'icon.png') // 添加图标路径
-      };
+      // 使用气泡弹窗显示AI回复
+      createBubbleWindow(aiResponse.message, 'info');
 
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
-      }
-
-      // 如果AI判断需要触发旅行，则显示气泡提示
+      // 如果AI判断需要触发旅行，则启动地图
       if (aiResponse.shouldTravel) {
-        // 显示AI生成的气泡提示
+        console.log('AI判断需要旅行，启动地图...');
+        
+        // 延迟一下再启动地图，让用户先看到AI回复
         setTimeout(() => {
-          showScreenshotBubble(aiResponse.message);
-        }, 1200);
+          try {
+            // 直接调用旅程启动逻辑
+            handleJourneyStart({ destination: aiResponse.message });
+          } catch (error) {
+            console.error('启动旅程失败:', error);
+          }
+        }, 2000); // 2秒后启动地图
       }
 
       // 切换宠物表情
@@ -892,9 +1066,8 @@ function registerScreenshotListener() {
         icon: path.join(__dirname, 'icon.png') // 添加图标路径
       };
 
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
-      }
+      // 使用气泡弹窗显示趣味提醒
+      createBubbleWindow(funMessage, 'fun');
     });
 
     if (!ret3) {
@@ -1009,15 +1182,8 @@ ipcMain.on('manual-fun-reminder', async () => {
   // 生成AI趣味提醒
   const funMessage = await generateFunReminder();
 
-  const notification = {
-    title: 'Fun Reminder',
-    body: funMessage,
-    icon: path.join(__dirname, 'icon.png') // 添加图标路径
-  };
-
-  if (Notification.isSupported()) {
-    new Notification(notification).show();
-  }
+  // 使用气泡弹窗显示趣味提醒
+  createBubbleWindow(funMessage, 'fun');
 });
 
 // IPC事件处理：显示当前旅程状态
@@ -1025,15 +1191,8 @@ ipcMain.on('check-journey-status', async () => {
   // 生成AI旅程状态
   const statusMessage = await generateJourneyStatus();
 
-  const notification = {
-    title: 'Journey Status',
-    body: statusMessage,
-    icon: path.join(__dirname, 'icon.png') // 添加图标路径
-  };
-
-  if (Notification.isSupported()) {
-    new Notification(notification).show();
-  }
+  // 使用气泡弹窗显示旅程状态
+  createBubbleWindow(statusMessage, 'journey');
 });
 
 // 应用准备就绪时执行
@@ -1085,6 +1244,10 @@ app.on('will-quit', () => {
 
   // 移除IPC监听器
   ipcMain.removeAllListeners('request-travel-info');
+  ipcMain.removeAllListeners('show-rest-reminder');
+  ipcMain.removeAllListeners('show-water-reminder');
+  ipcMain.removeAllListeners('show-fun-reminder');
+  ipcMain.removeAllListeners('show-journey-status');
 });
 
 // 窗口移动监听器，让宠物跟随吸附的窗口
@@ -1201,3 +1364,24 @@ function animateToPosition(window, targetX, targetY, duration = 1000) {
   
   animate();
 }
+
+// 添加新的IPC监听器来处理各种提醒
+ipcMain.on('show-rest-reminder', (event, message) => {
+  console.log('显示休息提醒:', message);
+  createBubbleWindow(message, 'info');
+});
+
+ipcMain.on('show-water-reminder', (event, message) => {
+  console.log('显示喝水提醒:', message);
+  createBubbleWindow(message, 'water');
+});
+
+ipcMain.on('show-fun-reminder', (event, message) => {
+  console.log('显示趣味提醒:', message);
+  createBubbleWindow(message, 'fun');
+});
+
+ipcMain.on('show-journey-status', (event, message) => {
+  console.log('显示旅程状态:', message);
+  createBubbleWindow(message, 'journey');
+});

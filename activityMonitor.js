@@ -92,14 +92,12 @@ class ActivityMonitor {
 
   // 显示不活动提醒
   showInactivityNotification() {
-    const notification = {
-      title: '休息提醒',
-      body: '起来走两步，不然椅子会长你身上',
-      icon: 'icon.png' // 需要提供图标文件
-    };
-
-    if (Notification.isSupported()) {
-      new Notification(notification).show();
+    // 通过IPC发送休息提醒到主进程，使用气泡弹窗
+    try {
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.send('show-rest-reminder', '起来走两步，不然椅子会长你身上');
+    } catch (error) {
+      console.error('Failed to send rest reminder:', error);
     }
   }
 
@@ -113,14 +111,12 @@ class ActivityMonitor {
 
     const message = messages[Math.floor(Math.random() * messages.length)];
 
-    const notification = {
-      title: message.title,
-      body: message.body,
-      icon: 'icon.png' // 需要提供图标文件
-    };
-
-    if (Notification.isSupported()) {
-      new Notification(notification).show();
+    // 通过IPC发送喝水提醒到主进程，使用气泡弹窗
+    try {
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.send('show-water-reminder', message.body);
+    } catch (error) {
+      console.error('Failed to send water reminder:', error);
     }
 
     // 同时显示窗口提醒
@@ -133,15 +129,12 @@ class ActivityMonitor {
       // 使用AI生成趣味提醒内容
       const aiMessage = await generateFunReminder();
 
-      const notification = {
-        title: '趣味提醒',
-        body: aiMessage,
-        icon: 'icon.png'
-      };
-
-      // 使用原生Windows通知
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
+      // 通过IPC发送趣味提醒到主进程，使用气泡弹窗
+      try {
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.send('show-fun-reminder', aiMessage);
+      } catch (error) {
+        console.error('Failed to send fun reminder:', error);
       }
     } catch (error) {
       console.error('Failed to generate AI fun reminder:', error);
@@ -155,29 +148,24 @@ class ActivityMonitor {
 
       const message = messages[Math.floor(Math.random() * messages.length)];
 
-      const notification = {
-        title: message.title,
-        body: message.body,
-        icon: 'icon.png'
-      };
-
-      // 使用原生Windows通知
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
+      // 通过IPC发送趣味提醒到主进程，使用气泡弹窗
+      try {
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.send('show-fun-reminder', message.body);
+      } catch (error) {
+        console.error('Failed to send fun reminder:', error);
       }
     }
   }
 
   // 显示旅程状态
   showJourneyStatus() {
-    const notification = {
-      title: '旅程状态',
-      body: '你的小旅星正在冰岛看极光呢！预计还有15小时到达 🌌',
-      icon: 'icon.png'
-    };
-
-    if (Notification.isSupported()) {
-      new Notification(notification).show();
+    // 通过IPC发送旅程状态到主进程，使用气泡弹窗
+    try {
+      const { ipcRenderer } = require('electron');
+      ipcRenderer.send('show-journey-status', '你的小旅星正在冰岛看极光呢！预计还有15小时到达 🌌');
+    } catch (error) {
+      console.error('Failed to send journey status:', error);
     }
   }
 
