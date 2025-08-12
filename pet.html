@@ -69,7 +69,8 @@
             opacity: 0.6;
         }
 
-        /* 吸附动画 */
+        /* 吸附动画 - 暂时注释掉 */
+        /*
         @keyframes snap-bounce {
             0% {
                 transform: scale(1);
@@ -120,6 +121,8 @@
                 transform: scale(1) translateX(0);
             }
         }
+
+        */
     </style>
 </head>
 
@@ -370,7 +373,8 @@
             // 保留此监听器用于其他功能，但不再用于拖动
         });
 
-        // 监听边缘吸附完成事件
+        // 监听边缘吸附完成事件 - 暂时注释掉
+        /*
         ipcRenderer.on('snap-completed', (event, x, y, snapType, shouldFlip) => {
             console.log('边缘吸附完成:', x, y, snapType, shouldFlip);
 
@@ -396,8 +400,10 @@
                 pet.style.animation = '';
             }, 200);
         });
+        */
 
-        // 监听返回原位置事件
+        // 监听返回原位置事件 - 暂时注释掉
+        /*
         ipcRenderer.on('return-to-original', (event) => {
             console.log('开始返回原位置');
 
@@ -418,6 +424,7 @@
             // 清除动画
             pet.style.animation = '';
         });
+        */
 
 
 
