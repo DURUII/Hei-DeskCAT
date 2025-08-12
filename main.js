@@ -39,6 +39,11 @@ let snapInfo = {
   attachedWindow: null
 };
 
+// 桌宠状态管理
+let petStateTimer = null;
+let currentPetEmotion = null;
+const PET_STATE_DURATION = 5000; // 状态持续时间（毫秒）
+
 // 全局旅行数据
 let globalTravelData = null;
 
@@ -295,6 +300,23 @@ function createPetWindow() {
       console.log('Drag ended, position should be updated');
       // 可以在这里添加拖动结束后的其他逻辑
     }, 50);
+  });
+
+  // 监听手动重置状态事件（用于调试）
+  ipcMain.on('manual-reset-pet-state', (event) => {
+    console.log('手动重置桌宠状态');
+    resetPetState();
+  });
+
+  // 监听状态查询事件
+  ipcMain.on('query-pet-state', (event) => {
+    const stateInfo = {
+      currentEmotion: currentPetEmotion,
+      hasTimer: petStateTimer !== null,
+      timeRemaining: petStateTimer ? PET_STATE_DURATION : 0
+    };
+    console.log('当前桌宠状态:', stateInfo);
+    event.reply('pet-state-info', stateInfo);
   });
 
   // 监听右键菜单关闭事件
@@ -1140,11 +1162,14 @@ function registerScreenshotListener() {
         }, 1200);
       }
 
-      // 切换宠物表情
+      // 切换宠物表情并设置状态复原
       if (aiResponse.emotion && petWindow && !petWindow.isDestroyed()) {
         try {
           petWindow.webContents.send('change-emotion', aiResponse.emotion);
           console.log('Sent emotion change to pet:', aiResponse.emotion);
+
+          // 设置状态并启动复原计时器
+          setPetState(aiResponse.emotion);
         } catch (error) {
           console.error('Failed to send emotion change:', error);
         }
@@ -1198,6 +1223,25 @@ function registerScreenshotListener() {
     }
   } catch (error) {
     console.log('Fun reminder listener registration error:', error);
+  }
+
+  try {
+    // 先注销可能已注册的快捷键
+    globalShortcut.unregister('F6');
+
+    // 注册手动重置状态快捷键
+    const ret4 = globalShortcut.register('F6', () => {
+      console.log('Manual reset pet state triggered!');
+      resetPetState();
+    });
+
+    if (!ret4) {
+      console.log('Reset pet state listener registration failed');
+    } else {
+      console.log('Reset pet state listener registered successfully');
+    }
+  } catch (error) {
+    console.log('Reset pet state listener registration error:', error);
   }
 }
 
@@ -1391,5 +1435,41 @@ function clearSnapState() {
 
   if (petWindow && petWindow.attachedToWindow) {
     delete petWindow.attachedToWindow;
+  }
+}
+
+// 设置桌宠状态并启动复原计时器
+function setPetState(emotion) {
+  // 清除之前的计时器
+  if (petStateTimer) {
+    clearTimeout(petStateTimer);
+  }
+
+  currentPetEmotion = emotion;
+  console.log('设置桌宠状态:', emotion);
+
+  // 设置复原计时器
+  petStateTimer = setTimeout(() => {
+    resetPetState();
+  }, PET_STATE_DURATION);
+}
+
+// 重置桌宠状态为初始状态
+function resetPetState() {
+  if (petWindow && !petWindow.isDestroyed()) {
+    try {
+      // 发送重置状态信号给渲染进程
+      petWindow.webContents.send('reset-emotion');
+      console.log('重置桌宠状态为初始状态');
+
+      // 清除状态记录
+      currentPetEmotion = null;
+      if (petStateTimer) {
+        clearTimeout(petStateTimer);
+        petStateTimer = null;
+      }
+    } catch (error) {
+      console.error('重置桌宠状态失败:', error);
+    }
   }
 }

@@ -432,6 +432,16 @@
             console.error('Error setting up emotion listener:', error);
         }
 
+        // 监听状态复原事件
+        try {
+            require('electron').ipcRenderer.on('reset-emotion', (event) => {
+                console.log('收到状态复原信号，恢复初始状态');
+                updateDefaultEmotion();
+            });
+        } catch (error) {
+            console.error('Error setting up reset emotion listener:', error);
+        }
+
         console.log('Pet with drag and emotion support loaded');
     </script>
 </body>
