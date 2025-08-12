@@ -24,7 +24,12 @@ let mapWindow;
 let bubbleWindow;
 let waterReminderWindow;
 let petWindow;
-let contextMenuWindow = null; // 添加右键菜单窗口跟踪
+let contextMenuWindow = null;
+let transparencyWindow = null; // 添加右键菜单窗口跟踪
+
+// 拖动相关变量
+let isDragging = false;
+let dragOffset = { x: 0, y: 0 };
 let activityMonitor;
 let amapService;
 
@@ -90,7 +95,7 @@ function createPetWindow() {
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
-  
+
   petWindow.setPosition(
     width - 120,
     height - 120
@@ -98,7 +103,7 @@ function createPetWindow() {
 
   // 允许鼠标事件，但不穿透
   petWindow.setIgnoreMouseEvents(false);
-  
+
   // 设置窗口可以拖拽
   petWindow.setMovable(true);
 
@@ -198,7 +203,32 @@ function createPetWindow() {
     }
   });
 
-  // 监听设置宠物窗口位置事件
+  // 监听拖动开始事件
+  ipcMain.on('drag-start', (event, { offsetX, offsetY }) => {
+    console.log('Drag started with offset:', offsetX, offsetY);
+    isDragging = true;
+    dragOffset = { x: offsetX, y: offsetY };
+
+    // 临时禁用点击穿透，允许拖动
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.setIgnoreMouseEvents(false);
+      // 确保窗口可以接收鼠标事件
+      petWindow.setMovable(true);
+      petWindow.setFocusable(true);
+    }
+  });
+
+  // 监听绝对位置移动
+  ipcMain.on('move-pet-absolute', (event, { mouseX, mouseY }) => {
+    if (petWindow && isDragging) {
+      // 直接将窗口位置设置为鼠标位置减去偏移量
+      const newX = Math.round(mouseX - dragOffset.x);
+      const newY = Math.round(mouseY - dragOffset.y);
+      petWindow.setPosition(newX, newY);
+    }
+  });
+
+  // 监听设置宠物窗口位置事件（保留用于其他功能）
   ipcMain.on('set-pet-window-position', (event, x, y) => {
     if (petWindow && !petWindow.isDestroyed()) {
       try {
@@ -212,34 +242,45 @@ function createPetWindow() {
 
   // 监听拖拽结束事件，进行边缘吸附
   ipcMain.on('drag-end', (event) => {
+    console.log('Drag ended');
+    isDragging = false;
+
+    // 恢复正常的鼠标事件处理，允许右键菜单和点击
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.setIgnoreMouseEvents(false);
+      // 确保窗口可以接收所有鼠标事件
+      petWindow.setMovable(true);
+      petWindow.setFocusable(true);
+    }
+
     if (petWindow && !petWindow.isDestroyed()) {
       try {
         const [x, y] = petWindow.getPosition();
         const [width, height] = petWindow.getSize();
-        
+
         // 获取屏幕尺寸
         const { screen } = require('electron');
         const primaryDisplay = screen.getPrimaryDisplay();
         const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-        
+
         // 边缘吸附阈值（像素）
         const snapThreshold = 50;
-        
+
         let newX = x;
         let newY = y;
         let snapped = false;
         let snapType = '';
         let shouldFlip = false;
-        
+
         // 获取所有可见窗口信息
         const allWindows = BrowserWindow.getAllWindows();
-        const visibleWindows = allWindows.filter(win => 
+        const visibleWindows = allWindows.filter(win =>
           win.isVisible() && !win.isDestroyed() && win !== petWindow
         );
-        
+
         // 检测屏幕边缘吸附
         let screenSnapped = false;
-        
+
         // 检测左边缘吸附
         if (x <= snapThreshold) {
           newX = 0;
@@ -252,7 +293,7 @@ function createPetWindow() {
           screenSnapped = true;
           snapType = '右边缘';
         }
-        
+
         // 检测上边缘吸附
         if (y <= snapThreshold) {
           newY = 0;
@@ -266,10 +307,10 @@ function createPetWindow() {
           screenSnapped = true;
           snapType = '下边缘';
         }
-        
+
         // 特殊处理：屏幕角落吸附
         const cornerThreshold = 30;
-        
+
         // 左上角
         if (x <= cornerThreshold && y <= cornerThreshold) {
           newX = 0;
@@ -300,22 +341,22 @@ function createPetWindow() {
           screenSnapped = true;
           snapType = '右下角';
         }
-        
+
         // 检测其他窗口边缘吸附
         let windowSnapped = false;
         let closestWindow = null;
         let minDistance = Infinity;
         let attachedWindow = null; // 记录吸附的窗口
-        
+
         for (const win of visibleWindows) {
           try {
             const [winX, winY] = win.getPosition();
             const [winWidth, winHeight] = win.getSize();
-            
+
             // 优先检测上方位置（如果空间足够）
             const topSpace = winY;
             const canPlaceOnTop = topSpace >= height;
-            
+
             // 计算宠物窗口与目标窗口各边的距离
             const distances = [
               // 优先：上方位置（如果空间足够）
@@ -333,18 +374,18 @@ function createPetWindow() {
               { type: '上边缘', distance: Math.abs(y - (winY + winHeight)), x: newX, y: winY + winHeight, shouldFlip: true, priority: 2 },
               { type: '下边缘', distance: Math.abs((y + height) - winY), x: newX, y: winY - height, priority: 2 }
             ];
-            
+
             for (const dist of distances) {
               if (dist.distance <= snapThreshold && dist.distance < minDistance) {
                 // 检查是否在屏幕范围内
-                const isInScreenRange = 
+                const isInScreenRange =
                   dist.x >= 0 && dist.x <= screenWidth - width &&
                   dist.y >= 0 && dist.y <= screenHeight - height;
-                
+
                 if (isInScreenRange) {
                   // 优先选择优先级高的位置
-                  if (!closestWindow || dist.priority < closestWindow.priority || 
-                      (dist.priority === closestWindow.priority && dist.distance < minDistance)) {
+                  if (!closestWindow || dist.priority < closestWindow.priority ||
+                    (dist.priority === closestWindow.priority && dist.distance < minDistance)) {
                     minDistance = dist.distance;
                     closestWindow = { ...dist, windowTitle: win.getTitle() };
                     attachedWindow = win; // 记录吸附的窗口
@@ -357,7 +398,7 @@ function createPetWindow() {
             console.error('检测窗口边缘失败:', error);
           }
         }
-        
+
         // 优先使用窗口吸附，其次使用屏幕吸附
         if (windowSnapped && closestWindow) {
           newX = closestWindow.x;
@@ -365,7 +406,7 @@ function createPetWindow() {
           snapType = `${closestWindow.windowTitle}的${closestWindow.type}`;
           shouldFlip = closestWindow.shouldFlip || false;
           snapped = true;
-          
+
           // 记录当前吸附的窗口信息，用于后续跟随
           if (attachedWindow) {
             petWindow.attachedToWindow = {
@@ -382,22 +423,22 @@ function createPetWindow() {
             delete petWindow.attachedToWindow;
           }
         }
-        
+
         // 如果检测到边缘吸附，移动窗口
         if (snapped) {
           petWindow.setPosition(newX, newY);
-          
-          console.log('边缘吸附完成:', { 
-            from: [x, y], 
-            to: [newX, newY], 
+
+          console.log('边缘吸附完成:', {
+            from: [x, y],
+            to: [newX, newY],
             type: snapType,
             shouldFlip: shouldFlip
           });
-          
+
           // 通知渲染进程吸附完成，包含吸附类型和翻转信息
           petWindow.webContents.send('snap-completed', newX, newY, snapType, shouldFlip);
         }
-        
+
       } catch (error) {
         console.error('边缘吸附失败:', error);
       }
@@ -410,6 +451,129 @@ function createPetWindow() {
     contextMenuWindow = null;
   });
 
+  // 处理透明度调节
+  ipcMain.on('set-pet-transparency', (event, transparency) => {
+    console.log('Setting pet transparency to:', transparency);
+    try {
+      if (petWindow && !petWindow.isDestroyed()) {
+        // 将百分比转换为0-1的范围
+        const opacity = transparency / 100;
+        petWindow.setOpacity(opacity);
+        console.log('Pet window opacity set to:', opacity);
+      } else {
+        console.log('Pet window not available for transparency setting');
+      }
+    } catch (error) {
+      console.error('Error setting pet transparency:', error);
+    }
+  });
+
+  // 打开透明度控制窗口
+  ipcMain.on('open-transparency-window', (event) => {
+    console.log('Opening transparency control window');
+    try {
+      // 关闭已存在的透明度窗口
+      if (transparencyWindow && !transparencyWindow.isDestroyed()) {
+        transparencyWindow.close();
+        transparencyWindow = null;
+      }
+
+      // 获取右键菜单窗口位置
+      let x = 0, y = 0;
+      if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+        const bounds = contextMenuWindow.getBounds();
+        x = bounds.x + bounds.width + 10; // 在右键菜单右侧显示
+        y = bounds.y;
+      }
+
+      const newTransparencyWindow = new BrowserWindow({
+        width: 160,
+        height: 120,
+        frame: false,
+        alwaysOnTop: true,
+        transparent: true,
+        resizable: false,
+        skipTaskbar: true,
+        webPreferences: {
+          nodeIntegration: true,
+          contextIsolation: false,
+          enableRemoteModule: true
+        },
+        movable: false,
+        focusable: true,
+        x: x,
+        y: y
+      });
+
+      newTransparencyWindow.loadFile('transparencyWindow.html');
+
+      newTransparencyWindow.webContents.on('crashed', () => {
+        console.error('Transparency window crashed');
+        transparencyWindow = null;
+      });
+
+      newTransparencyWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Transparency window failed to load:', errorDescription);
+        transparencyWindow = null;
+      });
+
+      newTransparencyWindow.on('closed', () => {
+        transparencyWindow = null;
+        console.log('Transparency window closed, global variable cleared');
+      });
+
+      transparencyWindow = newTransparencyWindow;
+      console.log('Transparency window created successfully');
+    } catch (error) {
+      console.error('Error creating transparency window:', error);
+    }
+  });
+
+  // 关闭透明度控制窗口
+  ipcMain.on('close-transparency-window', (event) => {
+    console.log('Closing transparency control window');
+    try {
+      if (transparencyWindow && !transparencyWindow.isDestroyed()) {
+        transparencyWindow.close();
+        transparencyWindow = null;
+      }
+    } catch (error) {
+      console.error('Error closing transparency window:', error);
+    }
+  });
+
+  // 监听透明度窗口关闭事件
+  ipcMain.on('transparency-window-closed', (event) => {
+    console.log('Transparency window closed by user action');
+    transparencyWindow = null;
+  });
+
+  // 监听透明度窗口打开事件
+  ipcMain.on('transparency-window-opened', (event) => {
+    console.log('Transparency window opened');
+    // 通知右键菜单透明度窗口状态
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+      try {
+        contextMenuWindow.webContents.send('transparency-window-status', true);
+      } catch (error) {
+        console.error('Error sending transparency window status to context menu:', error);
+      }
+    }
+  });
+
+  // 监听透明度窗口状态更新
+  ipcMain.on('transparency-window-status', (event, isOpen) => {
+    console.log('Transparency window status update:', isOpen);
+    // 转发状态到右键菜单
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+      try {
+        contextMenuWindow.webContents.send('transparency-window-status', isOpen);
+      } catch (error) {
+        console.error('Error forwarding transparency window status:', error);
+      }
+    }
+  });
+
   // 监听关闭右键菜单事件
   ipcMain.on('close-context-menu', (event) => {
     console.log('Closing context menu from external request');
@@ -420,7 +584,7 @@ function createPetWindow() {
 
   // 设置窗口移动监听器
   setupWindowMoveListener();
-  
+
   return petWindow;
 }
 
@@ -508,7 +672,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   const newContextMenuWindow = new BrowserWindow({
     width: 180,
-    height: 100,
+    height: 140,
     frame: false,
     alwaysOnTop: true,
     transparent: true,
@@ -769,11 +933,11 @@ function createWaterReminderWindow() {
 async function captureScreenshot() {
   try {
     console.log('📸 Capturing screenshot...');
-    const sources = await desktopCapturer.getSources({ 
-      types: ['screen'], 
-      thumbnailSize: { width: 800, height: 600 } 
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 800, height: 600 }
     });
-    
+
     if (sources && sources.length > 0) {
       // 获取第一张屏幕截图
       const source = sources[0];
@@ -1094,18 +1258,18 @@ function setupWindowMoveListener() {
     if (petWindow && !petWindow.isDestroyed() && petWindow.attachedToWindow) {
       try {
         const attachedWindow = BrowserWindow.fromId(petWindow.attachedToWindow.id);
-        
+
         if (attachedWindow && !attachedWindow.isDestroyed() && attachedWindow.isVisible()) {
           // 窗口仍然存在且可见，检查位置是否变化
           const [winX, winY] = attachedWindow.getPosition();
           const [winWidth, winHeight] = attachedWindow.getSize();
           const [petX, petY] = petWindow.getPosition();
-          
+
           // 根据吸附类型计算新位置
           let newX = petX;
           let newY = petY;
           let shouldUpdate = false;
-          
+
           if (petWindow.attachedToWindow.type === '正上方') {
             newX = winX + Math.floor((winWidth - petWindow.getSize()[0]) / 2);
             newY = winY - petWindow.getSize()[1];
@@ -1127,7 +1291,7 @@ function setupWindowMoveListener() {
             newY = winY - petWindow.getSize()[1];
             shouldUpdate = true;
           }
-          
+
           if (shouldUpdate && (Math.abs(newX - petX) > 1 || Math.abs(newY - petY) > 1)) {
             petWindow.setPosition(newX, newY);
             console.log('宠物跟随窗口移动:', { from: [petX, petY], to: [newX, newY] });
@@ -1153,20 +1317,20 @@ function returnToOriginalPosition() {
       const { screen } = require('electron');
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-      
+
       const [petWidth, petHeight] = petWindow.getSize();
       const targetX = screenWidth - 120;
       const targetY = screenHeight - 120;
-      
+
       // 清除吸附状态
       delete petWindow.attachedToWindow;
-      
+
       // 通知渲染进程开始返回动画
       petWindow.webContents.send('return-to-original');
-      
+
       // 使用动画返回原位置
       animateToPosition(petWindow, targetX, targetY);
-      
+
     } catch (error) {
       console.error('返回原位置失败:', error);
     }
@@ -1177,19 +1341,19 @@ function returnToOriginalPosition() {
 function animateToPosition(window, targetX, targetY, duration = 1000) {
   const [startX, startY] = window.getPosition();
   const startTime = Date.now();
-  
+
   function animate() {
     const elapsed = Date.now() - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    
+
     // 使用缓动函数
     const easeProgress = 1 - Math.pow(1 - progress, 3);
-    
+
     const currentX = startX + (targetX - startX) * easeProgress;
     const currentY = startY + (targetY - startY) * easeProgress;
-    
+
     window.setPosition(Math.round(currentX), Math.round(currentY));
-    
+
     if (progress < 1) {
       requestAnimationFrame(animate);
     } else {
@@ -1198,6 +1362,6 @@ function animateToPosition(window, targetX, targetY, duration = 1000) {
       window.webContents.send('return-completed');
     }
   }
-  
+
   animate();
 }

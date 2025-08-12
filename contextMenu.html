@@ -24,8 +24,16 @@
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             padding: 8px 0;
-            min-width: 150px;
+            min-width: 180px;
             -webkit-app-region: no-drag;
+        }
+
+        .transparency-control {
+            position: relative;
+        }
+
+        .transparency-control.expanded {
+            background-color: #f5f5f5;
         }
 
         .context-menu-item {
@@ -84,6 +92,11 @@
             <span>打开主页面</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item transparency-control" id="transparencyControl">
+            <span>🎨</span>
+            <span>透明度调节</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item danger" id="exitApp">
             <span>🚪</span>
             <span>退出应用</span>
@@ -96,15 +109,31 @@
             const openMainWindow = document.getElementById('openMainWindow');
             const exitApp = document.getElementById('exitApp');
             const contextMenu = document.getElementById('contextMenu');
+            const transparencyControl = document.getElementById('transparencyControl');
 
             console.log('Context menu window script loaded successfully');
 
             // 自动关闭功能（4.5秒后开始淡出，5秒后关闭）
+            // 但是如果有展开的透明度控制，则不自动关闭
             setTimeout(() => {
-                if (contextMenu) {
+                const isTransparencyExpanded = transparencyControl.classList.contains('expanded');
+                if (!isTransparencyExpanded && contextMenu) {
                     contextMenu.classList.add('fade-out');
                 }
             }, 4500);
+
+            // 监听透明度窗口状态变化
+            let isTransparencyWindowOpen = false;
+
+            // 监听来自透明度窗口的状态更新
+            try {
+                ipcRenderer.on('transparency-window-status', (event, isOpen) => {
+                    isTransparencyWindowOpen = isOpen;
+                    console.log('Transparency window status updated:', isOpen);
+                });
+            } catch (error) {
+                console.error('Error setting up transparency window status listener:', error);
+            }
 
             // 打开主页面
             openMainWindow.addEventListener('click', () => {
@@ -114,6 +143,32 @@
                     window.close();
                 } catch (error) {
                     console.error('Error opening main window:', error);
+                }
+            });
+
+            // 透明度控制面板展开/收起
+            transparencyControl.addEventListener('click', (e) => {
+                e.stopPropagation(); // 阻止事件冒泡
+                const isExpanded = transparencyControl.classList.contains('expanded');
+
+                if (isExpanded) {
+                    transparencyControl.classList.remove('expanded');
+                    isTransparencyWindowOpen = false;
+                    // 关闭透明度窗口
+                    try {
+                        ipcRenderer.send('close-transparency-window');
+                    } catch (error) {
+                        console.error('Error closing transparency window:', error);
+                    }
+                } else {
+                    transparencyControl.classList.add('expanded');
+                    isTransparencyWindowOpen = true;
+                    // 打开透明度窗口
+                    try {
+                        ipcRenderer.send('open-transparency-window');
+                    } catch (error) {
+                        console.error('Error opening transparency window:', error);
+                    }
                 }
             });
 
@@ -131,9 +186,15 @@
             // 点击其他地方关闭菜单
             document.addEventListener('click', (e) => {
                 // 如果点击的是body（背景）或者不是菜单项，则关闭菜单
+                // 但是如果有展开的透明度控制或透明度窗口打开，则不关闭
                 if (e.target === document.body || !e.target.closest('.context-menu-item')) {
-                    console.log('Click outside menu, closing...');
-                    window.close();
+                    const isTransparencyExpanded = transparencyControl.classList.contains('expanded');
+                    if (!isTransparencyExpanded && !isTransparencyWindowOpen) {
+                        console.log('Click outside menu, closing...');
+                        window.close();
+                    } else {
+                        console.log('Transparency control is active, keeping menu open');
+                    }
                 }
             });
 
@@ -166,7 +227,8 @@
                     clearTimeout(autoCloseTimer);
                 }
                 autoCloseTimer = setTimeout(() => {
-                    if (contextMenu) {
+                    const isTransparencyExpanded = transparencyControl.classList.contains('expanded');
+                    if (!isTransparencyExpanded && !isTransparencyWindowOpen && contextMenu) {
                         contextMenu.classList.add('fade-out');
                     }
                 }, 4500);
