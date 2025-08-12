@@ -31,13 +31,13 @@ let transparencyWindow = null; // 添加右键菜单窗口跟踪
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
 
-// 吸附状态管理
-let isSnapped = false;
-let snapInfo = {
-  type: '',
-  position: null,
-  attachedWindow: null
-};
+// 吸附状态管理 - 暂时注释掉
+// let isSnapped = false;
+// let snapInfo = {
+//   type: '',
+//   position: null,
+//   attachedWindow: null
+// };
 
 // 桌宠状态管理
 let petStateTimer = null;
@@ -232,7 +232,8 @@ function createPetWindow() {
     isDragging = true;
     dragOffset = { x: offsetX, y: offsetY };
 
-    // 拖动开始时清除吸附状态，确保正常拖动
+    // 拖动开始时清除吸附状态，确保正常拖动 - 暂时注释掉
+    /*
     if (isSnapped) {
       console.log('拖动开始，清除吸附状态');
       isSnapped = false;
@@ -241,12 +242,13 @@ function createPetWindow() {
         position: null,
         attachedWindow: null
       };
-
+      
       // 清除吸附窗口记录
       if (petWindow && petWindow.attachedToWindow) {
         delete petWindow.attachedToWindow;
       }
     }
+    */
 
     // 临时禁用点击穿透，允许拖动
     if (petWindow && !petWindow.isDestroyed()) {
@@ -292,8 +294,8 @@ function createPetWindow() {
       petWindow.setFocusable(true);
     }
 
-    // 拖动结束后进行吸附判定
-    performSnapCheck();
+    // 拖动结束后进行吸附判定 - 暂时注释掉
+    // performSnapCheck();
 
     // 延迟确保位置更新完成
     setTimeout(() => {
@@ -321,36 +323,37 @@ function createPetWindow() {
 
   // 监听右键菜单关闭事件
 
-  // 吸附检查函数 - 在拖动结束后执行
+  // 吸附检查函数 - 在拖动结束后执行 - 暂时注释掉
+  /*
   function performSnapCheck() {
     if (!petWindow || petWindow.isDestroyed()) {
       return;
     }
-
+  
     try {
       const [x, y] = petWindow.getPosition();
       const [width, height] = petWindow.getSize();
-
+  
       // 获取屏幕尺寸
       const { screen } = require('electron');
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-
+  
       // 边缘吸附阈值（像素）
       const snapThreshold = 50;
-
+  
       let newX = x;
       let newY = y;
       let snapped = false;
       let snapType = '';
       let shouldFlip = false;
-
+  
       // 只进行屏幕边缘吸附，不吸附到其他窗口
       // 移除窗口吸附相关代码
-
+  
       // 检测屏幕边缘吸附
       let screenSnapped = false;
-
+  
       // 检测左边缘吸附
       if (x <= snapThreshold) {
         newX = 0;
@@ -363,7 +366,7 @@ function createPetWindow() {
         screenSnapped = true;
         snapType = '右边缘';
       }
-
+  
       // 检测上边缘吸附
       if (y <= snapThreshold) {
         newY = 0;
@@ -377,10 +380,10 @@ function createPetWindow() {
         screenSnapped = true;
         snapType = '下边缘';
       }
-
+  
       // 特殊处理：屏幕角落吸附
       const cornerThreshold = 30;
-
+  
       // 左上角
       if (x <= cornerThreshold && y <= cornerThreshold) {
         newX = 0;
@@ -411,13 +414,13 @@ function createPetWindow() {
         screenSnapped = true;
         snapType = '右下角';
       }
-
-
-
+  
+      
+  
       // 只进行屏幕边缘吸附
       if (screenSnapped) {
         snapped = true;
-
+        
         // 更新全局吸附状态
         isSnapped = true;
         snapInfo = {
@@ -425,7 +428,7 @@ function createPetWindow() {
           position: [newX, newY],
           attachedWindow: null
         };
-
+  
         // 清除吸附窗口记录
         if (petWindow.attachedToWindow) {
           delete petWindow.attachedToWindow;
@@ -438,17 +441,17 @@ function createPetWindow() {
           position: null,
           attachedWindow: null
         };
-
+        
         // 清除吸附窗口记录
         if (petWindow.attachedToWindow) {
           delete petWindow.attachedToWindow;
         }
       }
-
+  
       // 如果检测到边缘吸附，移动窗口
       if (snapped) {
         petWindow.setPosition(newX, newY);
-
+  
         console.log('边缘吸附完成:', {
           from: [x, y],
           to: [newX, newY],
@@ -456,17 +459,18 @@ function createPetWindow() {
           shouldFlip: shouldFlip,
           isSnapped: isSnapped
         });
-
+  
         // 只通知渲染进程位置和翻转信息，不包含吸附类型消息
         petWindow.webContents.send('snap-completed', newX, newY, '', shouldFlip);
       } else {
         console.log('未检测到吸附，清除吸附状态');
       }
-
+  
     } catch (error) {
       console.error('边缘吸附检查失败:', error);
     }
   }
+  */
 
   // 监听右键菜单关闭事件
   ipcMain.on('context-menu-closed', (event) => {
@@ -638,7 +642,7 @@ function createPetWindow() {
   });
 
   // 设置窗口移动监听器
-  setupWindowMoveListener();
+  // setupWindowMoveListener(); // 暂时注释掉
 
   return petWindow;
 }
@@ -1416,14 +1420,17 @@ app.on('will-quit', () => {
   ipcMain.removeAllListeners('request-travel-info');
 });
 
-// 窗口移动监听器 - 由于只进行屏幕边缘吸附，此功能已简化
+// 窗口移动监听器 - 暂时注释掉
+/*
 function setupWindowMoveListener() {
   // 由于只进行屏幕边缘吸附，不再需要窗口跟随功能
   // 保留函数结构以便将来扩展
   console.log('窗口跟随功能已禁用，只进行屏幕边缘吸附');
 }
+*/
 
-// 清除吸附状态的函数
+// 清除吸附状态的函数 - 暂时注释掉
+/*
 function clearSnapState() {
   console.log('清除吸附状态');
   isSnapped = false;
@@ -1432,11 +1439,12 @@ function clearSnapState() {
     position: null,
     attachedWindow: null
   };
-
+  
   if (petWindow && petWindow.attachedToWindow) {
     delete petWindow.attachedToWindow;
   }
 }
+*/
 
 // 设置桌宠状态并启动复原计时器
 function setPetState(emotion) {
