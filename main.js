@@ -3,9 +3,10 @@ require('dotenv').config();
 
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
 const path = require('path');
-const ActivityMonitor = require('./activityMonitor');
+const { ActivityMonitor, setCreatePetStatusWindowFunction } = require('./activityMonitor');
 const { analyzeScreenshot, generateFunReminder, generateJourneyStatus } = require('./aiService');
 const AMapService = require('./amapService');
+const weatherService = require('./weatherService');
 
 // 禁用GPU加速以解决Passthrough错误
 app.disableHardwareAcceleration();
@@ -24,7 +25,43 @@ let mapWindow;
 let bubbleWindow;
 let waterReminderWindow;
 let petWindow;
-let contextMenuWindow = null; // 添加右键菜单窗口跟踪
+let contextMenuWindow = null;
+let transparencyWindow = null; // 添加右键菜单窗口跟踪
+
+// 拖动相关变量
+let isDragging = false;
+let dragOffset = { x: 0, y: 0 };
+
+// 吸附状态管理 - 暂时注释掉
+// let isSnapped = false;
+// let snapInfo = {
+//   type: '',
+//   position: null,
+//   attachedWindow: null
+// };
+
+// 桌宠状态管理
+let petStateTimer = null;
+let currentPetEmotion = null;
+const PET_STATE_DURATION = 5000; // 状态持续时间（毫秒）
+
+// 全局旅行数据
+let globalTravelData = null;
+
+// 旅行状态管理
+let currentTravelStatus = {
+  isInProgress: false,
+  currentLocation: null,
+  currentWeather: null,
+  lastCity: null,
+  totalDistance: 0,
+  traveledDistance: 0,
+  progress: 0,
+  lastWeatherUpdateTime: 0
+};
+
+// 小旅星窗口管理
+let petStatusWindow = null;
 let activityMonitor;
 let amapService;
 
@@ -90,7 +127,7 @@ function createPetWindow() {
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
-  
+
   petWindow.setPosition(
     width - 120,
     height - 120
@@ -98,7 +135,7 @@ function createPetWindow() {
 
   // 允许鼠标事件，但不穿透
   petWindow.setIgnoreMouseEvents(false);
-  
+
   // 设置窗口可以拖拽
   petWindow.setMovable(true);
 
@@ -132,13 +169,17 @@ function createPetWindow() {
     });
   });
 
-  // 监听宠物点击事件
-  ipcMain.on('pet-clicked', (event, message) => {
-    console.log('Pet clicked, showing status window with message:', message);
+  // 监听宠物点击事件 - 触发趣味提醒
+  ipcMain.on('pet-clicked', async (event) => {
+    console.log('Pet clicked, triggering fun reminder');
     try {
-      createPetStatusWindow(message);
+      // 生成AI趣味提醒
+      const funMessage = await generateFunReminder();
+      createPetStatusWindow(funMessage);
     } catch (error) {
-      console.error('Error creating pet status window:', error);
+      console.error('Error creating fun reminder:', error);
+      // 如果生成失败，显示默认消息
+      createPetStatusWindow('今天也要开开心心的哦！✨');
     }
   });
 
@@ -198,7 +239,50 @@ function createPetWindow() {
     }
   });
 
-  // 监听设置宠物窗口位置事件
+  // 监听拖动开始事件
+  ipcMain.on('drag-start', (event, { offsetX, offsetY }) => {
+    console.log('Drag started with offset:', offsetX, offsetY);
+    isDragging = true;
+    dragOffset = { x: offsetX, y: offsetY };
+
+    // 拖动开始时清除吸附状态，确保正常拖动 - 暂时注释掉
+    /*
+    if (isSnapped) {
+      console.log('拖动开始，清除吸附状态');
+      isSnapped = false;
+      snapInfo = {
+        type: '',
+        position: null,
+        attachedWindow: null
+      };
+      
+      // 清除吸附窗口记录
+      if (petWindow && petWindow.attachedToWindow) {
+        delete petWindow.attachedToWindow;
+      }
+    }
+    */
+
+    // 临时禁用点击穿透，允许拖动
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.setIgnoreMouseEvents(false);
+      // 确保窗口可以接收鼠标事件
+      petWindow.setMovable(true);
+      petWindow.setFocusable(true);
+    }
+  });
+
+  // 监听绝对位置移动 - 简化版本，只设置位置不记录日志
+  ipcMain.on('move-pet-absolute', (event, { mouseX, mouseY }) => {
+    if (petWindow && isDragging) {
+      // 拖动过程中直接设置位置，不进行任何检查或记录
+      const newX = Math.round(mouseX - dragOffset.x);
+      const newY = Math.round(mouseY - dragOffset.y);
+      petWindow.setPosition(newX, newY);
+    }
+  });
+
+  // 监听设置宠物窗口位置事件（保留用于其他功能）
   ipcMain.on('set-pet-window-position', (event, x, y) => {
     if (petWindow && !petWindow.isDestroyed()) {
       try {
@@ -212,202 +296,471 @@ function createPetWindow() {
 
   // 监听拖拽结束事件，进行边缘吸附
   ipcMain.on('drag-end', (event) => {
+    console.log('Drag ended');
+    isDragging = false;
+
+    // 恢复正常的鼠标事件处理，允许右键菜单和点击
     if (petWindow && !petWindow.isDestroyed()) {
-      try {
-        const [x, y] = petWindow.getPosition();
-        const [width, height] = petWindow.getSize();
-        
-        // 获取屏幕尺寸
-        const { screen } = require('electron');
-        const primaryDisplay = screen.getPrimaryDisplay();
-        const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-        
-        // 边缘吸附阈值（像素）
-        const snapThreshold = 50;
-        
-        let newX = x;
-        let newY = y;
-        let snapped = false;
-        let snapType = '';
-        let shouldFlip = false;
-        
-        // 获取所有可见窗口信息
-        const allWindows = BrowserWindow.getAllWindows();
-        const visibleWindows = allWindows.filter(win => 
-          win.isVisible() && !win.isDestroyed() && win !== petWindow
-        );
-        
-        // 检测屏幕边缘吸附
-        let screenSnapped = false;
-        
-        // 检测左边缘吸附
-        if (x <= snapThreshold) {
-          newX = 0;
-          screenSnapped = true;
-          snapType = '左边缘';
-        }
-        // 检测右边缘吸附
-        else if (x + width >= screenWidth - snapThreshold) {
-          newX = screenWidth - width;
-          screenSnapped = true;
-          snapType = '右边缘';
-        }
-        
-        // 检测上边缘吸附
-        if (y <= snapThreshold) {
-          newY = 0;
-          screenSnapped = true;
-          snapType = '上边缘';
-          shouldFlip = true; // 顶部吸附时翻转
-        }
-        // 检测下边缘吸附
-        else if (y + height >= screenHeight - snapThreshold) {
-          newY = screenHeight - height;
-          screenSnapped = true;
-          snapType = '下边缘';
-        }
-        
-        // 特殊处理：屏幕角落吸附
-        const cornerThreshold = 30;
-        
-        // 左上角
-        if (x <= cornerThreshold && y <= cornerThreshold) {
-          newX = 0;
-          newY = 0;
-          screenSnapped = true;
-          snapType = '左上角';
-          shouldFlip = true;
-        }
-        // 右上角
-        else if (x + width >= screenWidth - cornerThreshold && y <= cornerThreshold) {
-          newX = screenWidth - width;
-          newY = 0;
-          screenSnapped = true;
-          snapType = '右上角';
-          shouldFlip = true;
-        }
-        // 左下角
-        else if (x <= cornerThreshold && y + height >= screenHeight - cornerThreshold) {
-          newX = 0;
-          newY = screenHeight - height;
-          screenSnapped = true;
-          snapType = '左下角';
-        }
-        // 右下角
-        else if (x + width >= screenWidth - cornerThreshold && y + height >= screenHeight - cornerThreshold) {
-          newX = screenWidth - width;
-          newY = screenHeight - height;
-          screenSnapped = true;
-          snapType = '右下角';
-        }
-        
-        // 检测其他窗口边缘吸附
-        let windowSnapped = false;
-        let closestWindow = null;
-        let minDistance = Infinity;
-        let attachedWindow = null; // 记录吸附的窗口
-        
-        for (const win of visibleWindows) {
+      petWindow.setIgnoreMouseEvents(false);
+      // 确保窗口可以接收所有鼠标事件
+      petWindow.setMovable(true);
+      petWindow.setFocusable(true);
+    }
+
+    // 拖动结束后进行吸附判定 - 暂时注释掉
+    // performSnapCheck();
+
+    // 延迟确保位置更新完成
+    setTimeout(() => {
+      console.log('Drag ended, position should be updated');
+      // 可以在这里添加拖动结束后的其他逻辑
+    }, 50);
+  });
+
+  // 监听手动重置状态事件（用于调试）
+  ipcMain.on('manual-reset-pet-state', (event) => {
+    console.log('手动重置桌宠状态');
+    resetPetState();
+  });
+
+  // 监听状态查询事件
+  ipcMain.on('query-pet-state', (event) => {
+    const stateInfo = {
+      currentEmotion: currentPetEmotion,
+      hasTimer: petStateTimer !== null,
+      timeRemaining: petStateTimer ? PET_STATE_DURATION : 0
+    };
+    console.log('当前桌宠状态:', stateInfo);
+    event.reply('pet-state-info', stateInfo);
+  });
+
+  // 监听旅行位置更新事件
+  ipcMain.on('travel-position-update', async (event, data) => {
+    try {
+      // console.log('Travel position update received:', data);
+
+      // 更新当前位置
+      if (data.lng && data.lat) {
+        currentTravelStatus.currentLocation = { lng: data.lng, lat: data.lat };
+        currentTravelStatus.progress = data.progress || 0;
+
+        // 设置天气服务的当前位置
+        weatherService.setCurrentLocation(data.lng, data.lat);
+
+        // 控制天气更新频率，避免QPS超限
+        const now = Date.now();
+        const weatherUpdateInterval = 300000; // 5分钟更新一次
+
+        if (now - currentTravelStatus.lastWeatherUpdateTime > weatherUpdateInterval) {
           try {
-            const [winX, winY] = win.getPosition();
-            const [winWidth, winHeight] = win.getSize();
-            
-            // 优先检测上方位置（如果空间足够）
-            const topSpace = winY;
-            const canPlaceOnTop = topSpace >= height;
-            
-            // 计算宠物窗口与目标窗口各边的距离
-            const distances = [
-              // 优先：上方位置（如果空间足够）
-              ...(canPlaceOnTop ? [{
-                type: '正上方',
-                distance: Math.abs(y - (winY - height)),
-                x: winX + Math.floor((winWidth - width) / 2), // 居中放置
-                y: winY - height,
-                shouldFlip: false,
-                priority: 1
-              }] : []),
-              // 其他边缘
-              { type: '左边缘', distance: Math.abs(x - (winX + winWidth)), x: winX + winWidth, y: newY, priority: 2 },
-              { type: '右边缘', distance: Math.abs((x + width) - winX), x: winX - width, y: newY, priority: 2 },
-              { type: '上边缘', distance: Math.abs(y - (winY + winHeight)), x: newX, y: winY + winHeight, shouldFlip: true, priority: 2 },
-              { type: '下边缘', distance: Math.abs((y + height) - winY), x: newX, y: winY - height, priority: 2 }
-            ];
-            
-            for (const dist of distances) {
-              if (dist.distance <= snapThreshold && dist.distance < minDistance) {
-                // 检查是否在屏幕范围内
-                const isInScreenRange = 
-                  dist.x >= 0 && dist.x <= screenWidth - width &&
-                  dist.y >= 0 && dist.y <= screenHeight - height;
-                
-                if (isInScreenRange) {
-                  // 优先选择优先级高的位置
-                  if (!closestWindow || dist.priority < closestWindow.priority || 
-                      (dist.priority === closestWindow.priority && dist.distance < minDistance)) {
-                    minDistance = dist.distance;
-                    closestWindow = { ...dist, windowTitle: win.getTitle() };
-                    attachedWindow = win; // 记录吸附的窗口
-                    windowSnapped = true;
-                  }
-                }
-              }
-            }
+            // 获取当前位置的天气信息
+            const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+            currentTravelStatus.currentWeather = weatherInfo;
+            currentTravelStatus.lastWeatherUpdateTime = now;
+            console.log(`Travel weather updated: ${weatherInfo.city} - ${weatherInfo.summary}`);
           } catch (error) {
-            console.error('检测窗口边缘失败:', error);
+            console.error('Error updating travel weather:', error);
           }
         }
-        
-        // 优先使用窗口吸附，其次使用屏幕吸附
-        if (windowSnapped && closestWindow) {
-          newX = closestWindow.x;
-          newY = closestWindow.y;
-          snapType = `${closestWindow.windowTitle}的${closestWindow.type}`;
-          shouldFlip = closestWindow.shouldFlip || false;
-          snapped = true;
-          
-          // 记录当前吸附的窗口信息，用于后续跟随
-          if (attachedWindow) {
-            petWindow.attachedToWindow = {
-              id: attachedWindow.id,
-              title: attachedWindow.getTitle(),
-              type: closestWindow.type, // 记录吸附类型
-              position: [newX, newY]
-            };
-          }
-        } else if (screenSnapped) {
-          snapped = true;
-          // 清除吸附窗口记录
-          if (petWindow.attachedToWindow) {
-            delete petWindow.attachedToWindow;
-          }
+
+        // 标记旅行正在进行
+        currentTravelStatus.isInProgress = true;
+      }
+    } catch (error) {
+      console.error('Error updating travel position:', error);
+    }
+  });
+
+  // 监听旅行状态查询事件
+  ipcMain.on('query-travel-status', (event) => {
+    console.log('Travel status requested:', currentTravelStatus);
+    event.reply('travel-status-info', currentTravelStatus);
+  });
+
+  // 监听获取当前天气事件
+  ipcMain.on('get-current-weather', async (event) => {
+    try {
+      const weatherInfo = await weatherService.getCurrentWeather();
+      console.log('Current weather requested:', weatherInfo);
+      event.reply('current-weather-info', weatherInfo);
+    } catch (error) {
+      console.error('Error getting current weather:', error);
+      event.reply('current-weather-info', weatherService.getDefaultWeather());
+    }
+  });
+
+  // 监听显示旅行状态事件
+  ipcMain.on('show-travel-status', async (event) => {
+    try {
+      console.log('Show travel status requested');
+
+      if (!currentTravelStatus.isInProgress) {
+        createPetStatusWindow('当前没有进行中的旅行\n按F2截图开始新的旅行！');
+        return;
+      }
+
+      let statusMessage = '🚀 正在旅行中...\n';
+
+      // 添加进度信息
+      if (currentTravelStatus.progress) {
+        statusMessage += `进度：${Math.round(currentTravelStatus.progress)}%\n`;
+      }
+
+      // 添加当前天气信息
+      if (currentTravelStatus.currentWeather) {
+        const weather = currentTravelStatus.currentWeather;
+        statusMessage += `${weather.emoji} ${weather.city}\n`;
+        statusMessage += `${weather.description} ${weather.temperatureText}`;
+
+        if (weather.windpower) {
+          statusMessage += ` | ${weather.windpower}级风`;
         }
-        
-        // 如果检测到边缘吸附，移动窗口
-        if (snapped) {
-          petWindow.setPosition(newX, newY);
-          
-          console.log('边缘吸附完成:', { 
-            from: [x, y], 
-            to: [newX, newY], 
-            type: snapType,
-            shouldFlip: shouldFlip
-          });
-          
-          // 通知渲染进程吸附完成，包含吸附类型和翻转信息
-          petWindow.webContents.send('snap-completed', newX, newY, snapType, shouldFlip);
+      } else {
+        // 如果没有天气信息，尝试获取当前天气
+        try {
+          const weatherInfo = await weatherService.getCurrentWeather();
+          if (weatherInfo) {
+            statusMessage += `${weatherInfo.emoji} ${weatherInfo.city}\n`;
+            statusMessage += `${weatherInfo.description} ${weatherInfo.temperatureText}`;
+          }
+        } catch (error) {
+          console.error('Error getting weather for status:', error);
+          statusMessage += '🌤️ 天气信息获取中...';
         }
-        
-      } catch (error) {
-        console.error('边缘吸附失败:', error);
+      }
+
+      createPetStatusWindow(statusMessage);
+    } catch (error) {
+      console.error('Error showing travel status:', error);
+      createPetStatusWindow('无法获取旅行状态信息');
+    }
+  });
+
+  // 监听地图天气请求事件
+  ipcMain.on('get-weather-for-coordinates', async (event, data) => {
+    try {
+      if (!data.lng || !data.lat) {
+        console.error('Invalid coordinates for weather request');
+        return;
+      }
+
+      const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+
+      // 发送天气信息回地图窗口
+      if (mapWindow && !mapWindow.isDestroyed()) {
+        mapWindow.webContents.send('weather-info-response', weatherInfo);
+      }
+    } catch (error) {
+      console.error('Error getting weather for map:', error);
+      // 发送默认天气信息
+      if (mapWindow && !mapWindow.isDestroyed()) {
+        mapWindow.webContents.send('weather-info-response', weatherService.getDefaultWeather());
       }
     }
   });
 
   // 监听右键菜单关闭事件
+
+  // 吸附检查函数 - 在拖动结束后执行 - 暂时注释掉
+  /*
+  function performSnapCheck() {
+    if (!petWindow || petWindow.isDestroyed()) {
+      return;
+    }
+  
+    try {
+      const [x, y] = petWindow.getPosition();
+      const [width, height] = petWindow.getSize();
+  
+      // 获取屏幕尺寸
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+  
+      // 边缘吸附阈值（像素）
+      const snapThreshold = 50;
+  
+      let newX = x;
+      let newY = y;
+      let snapped = false;
+      let snapType = '';
+      let shouldFlip = false;
+  
+      // 只进行屏幕边缘吸附，不吸附到其他窗口
+      // 移除窗口吸附相关代码
+  
+      // 检测屏幕边缘吸附
+      let screenSnapped = false;
+  
+      // 检测左边缘吸附
+      if (x <= snapThreshold) {
+        newX = 0;
+        screenSnapped = true;
+        snapType = '左边缘';
+      }
+      // 检测右边缘吸附
+      else if (x + width >= screenWidth - snapThreshold) {
+        newX = screenWidth - width;
+        screenSnapped = true;
+        snapType = '右边缘';
+      }
+  
+      // 检测上边缘吸附
+      if (y <= snapThreshold) {
+        newY = 0;
+        screenSnapped = true;
+        snapType = '上边缘';
+        shouldFlip = true; // 顶部吸附时翻转
+      }
+      // 检测下边缘吸附
+      else if (y + height >= screenHeight - snapThreshold) {
+        newY = screenHeight - height;
+        screenSnapped = true;
+        snapType = '下边缘';
+      }
+  
+      // 特殊处理：屏幕角落吸附
+      const cornerThreshold = 30;
+  
+      // 左上角
+      if (x <= cornerThreshold && y <= cornerThreshold) {
+        newX = 0;
+        newY = 0;
+        screenSnapped = true;
+        snapType = '左上角';
+        shouldFlip = true;
+      }
+      // 右上角
+      else if (x + width >= screenWidth - cornerThreshold && y <= cornerThreshold) {
+        newX = screenWidth - width;
+        newY = 0;
+        screenSnapped = true;
+        snapType = '右上角';
+        shouldFlip = true;
+      }
+      // 左下角
+      else if (x <= cornerThreshold && y + height >= screenHeight - cornerThreshold) {
+        newX = 0;
+        newY = screenHeight - height;
+        screenSnapped = true;
+        snapType = '左下角';
+      }
+      // 右下角
+      else if (x + width >= screenWidth - cornerThreshold && y + height >= screenHeight - cornerThreshold) {
+        newX = screenWidth - width;
+        newY = screenHeight - height;
+        screenSnapped = true;
+        snapType = '右下角';
+      }
+  
+      
+  
+      // 只进行屏幕边缘吸附
+      if (screenSnapped) {
+        snapped = true;
+        
+        // 更新全局吸附状态
+        isSnapped = true;
+        snapInfo = {
+          type: snapType,
+          position: [newX, newY],
+          attachedWindow: null
+        };
+  
+        // 清除吸附窗口记录
+        if (petWindow.attachedToWindow) {
+          delete petWindow.attachedToWindow;
+        }
+      } else {
+        // 没有吸附，清除吸附状态
+        isSnapped = false;
+        snapInfo = {
+          type: '',
+          position: null,
+          attachedWindow: null
+        };
+        
+        // 清除吸附窗口记录
+        if (petWindow.attachedToWindow) {
+          delete petWindow.attachedToWindow;
+        }
+      }
+  
+      // 如果检测到边缘吸附，移动窗口
+      if (snapped) {
+        petWindow.setPosition(newX, newY);
+  
+        console.log('边缘吸附完成:', {
+          from: [x, y],
+          to: [newX, newY],
+          type: snapType,
+          shouldFlip: shouldFlip,
+          isSnapped: isSnapped
+        });
+  
+        // 只通知渲染进程位置和翻转信息，不包含吸附类型消息
+        petWindow.webContents.send('snap-completed', newX, newY, '', shouldFlip);
+      } else {
+        console.log('未检测到吸附，清除吸附状态');
+      }
+  
+    } catch (error) {
+      console.error('边缘吸附检查失败:', error);
+    }
+  }
+  */
+
+  // 监听右键菜单关闭事件
   ipcMain.on('context-menu-closed', (event) => {
     console.log('Context menu closed by user action');
     contextMenuWindow = null;
+  });
+
+  // 处理透明度调节
+  ipcMain.on('set-pet-transparency', (event, transparency) => {
+    console.log('Setting pet transparency to:', transparency);
+    try {
+      if (petWindow && !petWindow.isDestroyed()) {
+        // 将百分比转换为0-1的范围
+        const opacity = transparency / 100;
+        petWindow.setOpacity(opacity);
+        console.log('Pet window opacity set to:', opacity);
+      } else {
+        console.log('Pet window not available for transparency setting');
+      }
+    } catch (error) {
+      console.error('Error setting pet transparency:', error);
+    }
+  });
+
+  // 打开透明度控制窗口
+  ipcMain.on('open-transparency-window', (event) => {
+    console.log('Opening transparency control window');
+    try {
+      // 关闭已存在的透明度窗口
+      if (transparencyWindow && !transparencyWindow.isDestroyed()) {
+        transparencyWindow.close();
+        transparencyWindow = null;
+      }
+
+      // 获取右键菜单窗口位置
+      let x = 0, y = 0;
+      if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+        const bounds = contextMenuWindow.getBounds();
+        x = bounds.x + bounds.width + 10; // 在右键菜单右侧显示
+        y = bounds.y;
+      }
+
+      const newTransparencyWindow = new BrowserWindow({
+        width: 160,
+        height: 120,
+        frame: false,
+        alwaysOnTop: true,
+        transparent: true,
+        resizable: false,
+        skipTaskbar: true,
+        webPreferences: {
+          nodeIntegration: true,
+          contextIsolation: false,
+          enableRemoteModule: true
+        },
+        movable: false,
+        focusable: true,
+        x: x,
+        y: y
+      });
+
+      newTransparencyWindow.loadFile('transparencyWindow.html');
+
+      newTransparencyWindow.webContents.on('crashed', () => {
+        console.error('Transparency window crashed');
+        transparencyWindow = null;
+      });
+
+      newTransparencyWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('Transparency window failed to load:', errorDescription);
+        transparencyWindow = null;
+      });
+
+      newTransparencyWindow.on('closed', () => {
+        transparencyWindow = null;
+        console.log('Transparency window closed, global variable cleared');
+      });
+
+      transparencyWindow = newTransparencyWindow;
+      console.log('Transparency window created successfully');
+    } catch (error) {
+      console.error('Error creating transparency window:', error);
+    }
+  });
+
+  // 关闭透明度控制窗口
+  ipcMain.on('close-transparency-window', (event) => {
+    console.log('Closing transparency control window');
+    try {
+      if (transparencyWindow && !transparencyWindow.isDestroyed()) {
+        transparencyWindow.close();
+        transparencyWindow = null;
+      }
+    } catch (error) {
+      console.error('Error closing transparency window:', error);
+    }
+  });
+
+  // 监听透明度窗口关闭事件
+  ipcMain.on('transparency-window-closed', (event) => {
+    console.log('Transparency window closed by user action');
+    transparencyWindow = null;
+  });
+
+  // 监听透明度窗口打开事件
+  ipcMain.on('transparency-window-opened', (event) => {
+    console.log('Transparency window opened');
+    // 通知右键菜单透明度窗口状态
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+      try {
+        contextMenuWindow.webContents.send('transparency-window-status', true);
+      } catch (error) {
+        console.error('Error sending transparency window status to context menu:', error);
+      }
+    }
+  });
+
+  // 监听透明度窗口状态更新
+  ipcMain.on('transparency-window-status', (event, isOpen) => {
+    console.log('Transparency window status update:', isOpen);
+    // 转发状态到右键菜单
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+      try {
+        contextMenuWindow.webContents.send('transparency-window-status', isOpen);
+      } catch (error) {
+        console.error('Error forwarding transparency window status:', error);
+      }
+    }
+  });
+
+  // 监听打开地图窗口请求
+  ipcMain.on('open-map-window', (event) => {
+    console.log('Opening map window from context menu');
+    try {
+      if (mapWindow && !mapWindow.isDestroyed()) {
+        mapWindow.show();
+        mapWindow.focus();
+      } else {
+        // 检查是否有旅行数据
+        if (globalTravelData && globalTravelData.origin && globalTravelData.destination) {
+          // 有旅行数据，创建地图窗口
+          createMapWindow(globalTravelData);
+        } else {
+          // 没有旅行数据，显示状态提醒
+          console.log('No travel data available, showing status reminder');
+          const reminderMessage = '还没有设置目的地，请按F2截图触发旅行！';
+          createPetStatusWindow(reminderMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Error opening map window:', error);
+    }
   });
 
   // 监听关闭右键菜单事件
@@ -418,20 +771,42 @@ function createPetWindow() {
     }
   });
 
+  // 监听关闭小旅星窗口事件
+  ipcMain.on('close-pet-status-window', (event) => {
+    console.log('Closing pet status window from external request');
+    if (petStatusWindow && !petStatusWindow.isDestroyed()) {
+      petStatusWindow.close();
+    }
+  });
+
   // 设置窗口移动监听器
-  setupWindowMoveListener();
-  
+  // setupWindowMoveListener(); // 暂时注释掉
+
   return petWindow;
 }
 
 // 创建宠物状态弹窗窗口
 function createPetStatusWindow(message) {
-  const statusWindow = new BrowserWindow({
+  console.log('Creating pet status window with message:', message);
+
+  // 关闭已存在的小旅星窗口
+  if (petStatusWindow && !petStatusWindow.isDestroyed()) {
+    console.log('Closing existing pet status window');
+    try {
+      petStatusWindow.close();
+      petStatusWindow = null;
+    } catch (error) {
+      console.error('Error closing existing pet status window:', error);
+      petStatusWindow = null;
+    }
+  }
+
+  const newPetStatusWindow = new BrowserWindow({
     width: 220,
     height: 120,
     frame: false,
     alwaysOnTop: true,
-    transparent: false,
+    transparent: true,
     resizable: false,
     skipTaskbar: true,
     webPreferences: {
@@ -440,56 +815,149 @@ function createPetStatusWindow(message) {
       enableRemoteModule: true
     },
     movable: false,
-    focusable: false
+    focusable: true,
+    hasShadow: false
   });
 
-  statusWindow.loadFile('petStatus.html');
+  newPetStatusWindow.loadFile('petStatus.html');
 
-  // 设置弹窗位置在宠物窗口上方
+  // 智能计算弹窗位置，避免被桌面边框遮挡
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
-  // 获取宠物窗口位置
-  const petPosition = petWindow ? petWindow.getPosition() : [width - 120, height - 120];
+  // 获取宠物窗口位置和大小
+  let petPosition, petSize;
 
-  statusWindow.setPosition(
-    petPosition[0] - 60, // 居中显示
-    petPosition[1] - 140 // 在宠物上方
+  if (petWindow && !petWindow.isDestroyed()) {
+    try {
+      // 强制刷新位置信息
+      petPosition = petWindow.getPosition();
+      petSize = petWindow.getSize();
+
+      // 验证位置信息的有效性
+      if (petPosition && Array.isArray(petPosition) && petPosition.length === 2 &&
+        petSize && Array.isArray(petSize) && petSize.length === 2) {
+        console.log('Pet window position:', petPosition, 'size:', petSize);
+      } else {
+        throw new Error('Invalid position or size data');
+      }
+    } catch (error) {
+      console.error('Error getting pet window position:', error);
+      petPosition = [screenWidth - 120, screenHeight - 120];
+      petSize = [100, 100];
+    }
+  } else {
+    petPosition = [screenWidth - 120, screenHeight - 120];
+    petSize = [100, 100];
+    console.log('Using default pet position:', petPosition);
+  }
+
+  // 气泡窗口的尺寸
+  const bubbleWidth = 220;
+  const bubbleHeight = 120;
+  const bubbleTailHeight = 16; // 尾巴的高度
+
+  // 计算最佳位置
+  let bubbleX, bubbleY, bubbleDirection;
+
+  // 计算桌宠中心位置
+  const petCenterX = petPosition[0] + (petSize[0] / 2);
+  const petCenterY = petPosition[1] + (petSize[1] / 2);
+
+  // 优先尝试上方位置
+  if (petPosition[1] >= bubbleHeight + bubbleTailHeight + 10) {
+    // 上方有足够空间
+    bubbleX = petCenterX - (bubbleWidth / 2);
+    bubbleY = petPosition[1] - bubbleHeight - bubbleTailHeight;
+    bubbleDirection = 'top';
+  } else if (petPosition[1] + petSize[1] + bubbleHeight + bubbleTailHeight <= screenHeight) {
+    // 下方有足够空间
+    bubbleX = petCenterX - (bubbleWidth / 2);
+    bubbleY = petPosition[1] + petSize[1] + bubbleTailHeight;
+    bubbleDirection = 'bottom';
+  } else if (petPosition[0] >= bubbleWidth + bubbleTailHeight + 10) {
+    // 左侧有足够空间
+    bubbleX = petPosition[0] - bubbleWidth - bubbleTailHeight;
+    bubbleY = petCenterY - (bubbleHeight / 2);
+    bubbleDirection = 'left';
+  } else if (petPosition[0] + petSize[0] + bubbleWidth + bubbleTailHeight <= screenWidth) {
+    // 右侧有足够空间
+    bubbleX = petPosition[0] + petSize[0] + bubbleTailHeight;
+    bubbleY = petCenterY - (bubbleHeight / 2);
+    bubbleDirection = 'right';
+  } else {
+    // 如果所有方向都没有足够空间，强制显示在上方
+    bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, petCenterX - (bubbleWidth / 2)));
+    bubbleY = Math.max(10, petPosition[1] - bubbleHeight - bubbleTailHeight);
+    bubbleDirection = 'top';
+  }
+
+  // 确保气泡不会超出屏幕边界
+  bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, bubbleX));
+  bubbleY = Math.max(10, Math.min(screenHeight - bubbleHeight - 10, bubbleY));
+
+  // 验证计算出的位置是否合理
+  const distanceFromPet = Math.sqrt(
+    Math.pow(bubbleX + bubbleWidth / 2 - petCenterX, 2) +
+    Math.pow(bubbleY + bubbleHeight / 2 - petCenterY, 2)
   );
 
-  // 通过IPC传递消息
-  statusWindow.webContents.once('dom-ready', () => {
+  // 如果气泡距离桌宠太远（超过200像素），使用默认位置
+  if (distanceFromPet > 200) {
+    console.warn(`Bubble too far from pet (${distanceFromPet}px), using default position`);
+    bubbleX = Math.max(10, Math.min(screenWidth - bubbleWidth - 10, petCenterX - bubbleWidth / 2));
+    bubbleY = Math.max(10, Math.min(screenHeight - bubbleHeight - 10, petCenterY - bubbleHeight / 2));
+    bubbleDirection = 'top';
+  }
+
+  console.log(`Positioning bubble at (${bubbleX}, ${bubbleY}) with direction: ${bubbleDirection}`);
+  console.log(`Pet center: (${petCenterX}, ${petCenterY}), Pet position: (${petPosition[0]}, ${petPosition[1]}), Pet size: (${petSize[0]}, ${petSize[1]})`);
+  console.log(`Screen size: (${screenWidth}, ${screenHeight}), Bubble size: (${bubbleWidth}, ${bubbleHeight})`);
+  console.log(`Distance from pet: ${distanceFromPet}px`);
+
+  newPetStatusWindow.setPosition(Math.round(bubbleX), Math.round(bubbleY));
+
+  // 通过IPC传递消息和气泡方向
+  newPetStatusWindow.webContents.once('dom-ready', () => {
     try {
-      console.log('Sending message to status window:', message);
-      statusWindow.webContents.send('update-status-message', message);
+      console.log('Sending message and direction to status window:', message, bubbleDirection);
+      newPetStatusWindow.webContents.send('update-status-message', message);
+      newPetStatusWindow.webContents.send('set-bubble-direction', bubbleDirection);
     } catch (error) {
       console.error('Error sending message to status window:', error);
     }
   });
 
   // 监听窗口错误
-  statusWindow.webContents.on('crashed', () => {
+  newPetStatusWindow.webContents.on('crashed', () => {
     console.error('Status window crashed');
+    petStatusWindow = null;
   });
 
-  statusWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+  newPetStatusWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     console.error('Status window failed to load:', errorCode, errorDescription);
+    petStatusWindow = null;
   });
 
-  // 3秒后自动关闭
-  setTimeout(() => {
-    try {
-      if (statusWindow && !statusWindow.isDestroyed()) {
-        console.log('Auto-closing status window');
-        statusWindow.close();
-      }
-    } catch (error) {
-      console.error('Error closing status window:', error);
-    }
-  }, 3000);
+  // 监听窗口关闭事件
+  newPetStatusWindow.on('closed', () => {
+    console.log('Pet status window closed');
+    petStatusWindow = null;
+  });
 
-  return statusWindow;
+  // 监听窗口失去焦点事件（点击外部关闭）
+  newPetStatusWindow.on('blur', () => {
+    console.log('Pet status window lost focus, closing');
+    if (newPetStatusWindow && !newPetStatusWindow.isDestroyed()) {
+      newPetStatusWindow.close();
+    }
+  });
+
+  // 保存到全局变量
+  petStatusWindow = newPetStatusWindow;
+
+  return newPetStatusWindow;
 }
 
 // 创建右键菜单窗口
@@ -508,7 +976,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   const newContextMenuWindow = new BrowserWindow({
     width: 180,
-    height: 100,
+    height: 220,
     frame: false,
     alwaysOnTop: true,
     transparent: true,
@@ -532,7 +1000,7 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
 
   // 菜单尺寸
   const menuWidth = 180;
-  const menuHeight = 100;
+  const menuHeight = 220;
 
   // 计算最佳位置
   let finalX = x;
@@ -632,6 +1100,14 @@ function setupGlobalClickHandler() {
 function createMapWindow(travelData = { origin: '武汉光谷', destination: '北京天安门' }) {
   console.log('Creating map window, travel data:', travelData);
 
+  // 检查是否已存在地图窗口
+  if (mapWindow && !mapWindow.isDestroyed()) {
+    console.log('Map window already exists, showing and focusing');
+    mapWindow.show();
+    mapWindow.focus();
+    return mapWindow;
+  }
+
   // 清理旅行数据中的乱码字符
   const cleanTravelData = {
     origin: cleanText(travelData.origin) || '武汉光谷',
@@ -639,31 +1115,38 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     userLocation: travelData.userLocation || null
   };
 
+  // 保存到全局变量
+  globalTravelData = cleanTravelData;
+
   console.log('Cleaned travel data:', cleanTravelData);
 
   mapWindow = new BrowserWindow({
-    width: 300,
-    height: 200,
+    width: 800,
+    height: 600,
     frame: false,
-    alwaysOnTop: true,
-    transparent: false, // 禁用透明度以提高兼容性
+    alwaysOnTop: false, // 与主页面保持一致
+    transparent: false,
+    resizable: true, // 允许调整大小
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     },
-    movable: true // 允许窗口移动
+    movable: true, // 允许窗口移动
+    minimizable: true, // 允许最小化
+    maximizable: true, // 允许最大化
+    show: false // 初始不显示，等待加载完成后显示
   });
 
   mapWindow.loadFile('map.html');
 
-  // 设置地图窗口位置到屏幕右上角
+  // 设置地图窗口位置到屏幕中央
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
   mapWindow.setPosition(
-    width - 310,
-    50
+    Math.round((width - 800) / 2),
+    Math.round((height - 600) / 2)
   );
 
   // 通过IPC将高德地图API Key和旅行信息传递给地图窗口
@@ -680,6 +1163,22 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     setTimeout(() => {
       mapWindow.webContents.send('travel-info', cleanTravelData);
     }, 1000);
+
+    // 显示窗口
+    mapWindow.show();
+  });
+
+  // 监听地图窗口关闭事件，改为隐藏而不是销毁
+  mapWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mapWindow.hide();
+      console.log('Map window hidden instead of closed');
+    } else {
+      // 应用退出时清理全局变量
+      globalTravelData = null;
+      console.log('App quitting, clearing global travel data');
+    }
   });
 
   // 监听地图窗口请求旅行信息
@@ -687,6 +1186,14 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     console.log('Map window requesting travel info');
     if (mapWindow && !mapWindow.isDestroyed()) {
       mapWindow.webContents.send('travel-info', cleanTravelData);
+    }
+  });
+
+  // 监听地图窗口隐藏请求
+  ipcMain.on('hide-map-window', () => {
+    console.log('Hiding map window');
+    if (mapWindow && !mapWindow.isDestroyed()) {
+      mapWindow.hide();
     }
   });
 
@@ -727,53 +1234,21 @@ function createBubbleWindow(message) {
   return bubbleWindow;
 }
 
-// 创建喝水提醒窗口
+// 创建喝水提醒窗口 - 使用小旅星窗口
 function createWaterReminderWindow() {
-  if (waterReminderWindow) {
-    waterReminderWindow.focus();
-    return;
-  }
-
-  waterReminderWindow = new BrowserWindow({
-    width: 300,
-    height: 200,
-    frame: false,
-    alwaysOnTop: true,
-    transparent: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  });
-
-  waterReminderWindow.loadFile('waterReminder.html');
-
-  // 设置窗口位置到屏幕中央
-  const { screen } = require('electron');
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-
-  waterReminderWindow.setPosition(
-    Math.floor((width - 300) / 2),
-    Math.floor((height - 200) / 2)
-  );
-
-  waterReminderWindow.on('closed', () => {
-    waterReminderWindow = null;
-  });
-
-  return waterReminderWindow;
+  const waterMessage = '💧 该喝水啦！记得保持水分补充哦～';
+  createPetStatusWindow(waterMessage);
 }
 
 // 截取屏幕截图
 async function captureScreenshot() {
   try {
     console.log('📸 Capturing screenshot...');
-    const sources = await desktopCapturer.getSources({ 
-      types: ['screen'], 
-      thumbnailSize: { width: 800, height: 600 } 
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 800, height: 600 }
     });
-    
+
     if (sources && sources.length > 0) {
       // 获取第一张屏幕截图
       const source = sources[0];
@@ -818,16 +1293,8 @@ function registerScreenshotListener() {
       const aiResponse = await captureScreenshot();
       console.log('AI analysis result:', aiResponse);
 
-      // 使用Windows原生通知显示AI回复
-      const notification = {
-        title: 'DeskTripper',
-        body: aiResponse.message,
-        icon: path.join(__dirname, 'icon.png') // 添加图标路径
-      };
-
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
-      }
+      // 使用小旅星窗口显示AI回复
+      createPetStatusWindow(aiResponse.message);
 
       // 如果AI判断需要触发旅行，则显示气泡提示
       if (aiResponse.shouldTravel) {
@@ -837,11 +1304,14 @@ function registerScreenshotListener() {
         }, 1200);
       }
 
-      // 切换宠物表情
+      // 切换宠物表情并设置状态复原
       if (aiResponse.emotion && petWindow && !petWindow.isDestroyed()) {
         try {
           petWindow.webContents.send('change-emotion', aiResponse.emotion);
           console.log('Sent emotion change to pet:', aiResponse.emotion);
+
+          // 设置状态并启动复原计时器
+          setPetState(aiResponse.emotion);
         } catch (error) {
           console.error('Failed to send emotion change:', error);
         }
@@ -885,16 +1355,7 @@ function registerScreenshotListener() {
       console.log('Manual fun reminder triggered!');
       // 生成AI趣味提醒
       const funMessage = await generateFunReminder();
-
-      const notification = {
-        title: 'Fun Reminder',
-        body: funMessage,
-        icon: path.join(__dirname, 'icon.png') // 添加图标路径
-      };
-
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
-      }
+      createPetStatusWindow(funMessage);
     });
 
     if (!ret3) {
@@ -904,6 +1365,25 @@ function registerScreenshotListener() {
     }
   } catch (error) {
     console.log('Fun reminder listener registration error:', error);
+  }
+
+  try {
+    // 先注销可能已注册的快捷键
+    globalShortcut.unregister('F6');
+
+    // 注册手动重置状态快捷键
+    const ret4 = globalShortcut.register('F6', () => {
+      console.log('Manual reset pet state triggered!');
+      resetPetState();
+    });
+
+    if (!ret4) {
+      console.log('Reset pet state listener registration failed');
+    } else {
+      console.log('Reset pet state listener registered successfully');
+    }
+  } catch (error) {
+    console.log('Reset pet state listener registration error:', error);
   }
 }
 
@@ -958,6 +1438,35 @@ ipcMain.on('start-journey', async (event, data) => {
       userLocation: userLocation
     };
 
+    // 保存到全局变量
+    globalTravelData = travelData;
+
+    // 初始化旅行状态
+    currentTravelStatus = {
+      isInProgress: true,
+      currentLocation: userLocation.coordinates ? { lng: userLocation.coordinates[0], lat: userLocation.coordinates[1] } : null,
+      currentWeather: null,
+      lastCity: userLocation.city,
+      totalDistance: 0,
+      traveledDistance: 0,
+      progress: 0
+    };
+
+    // 获取起点天气信息
+    if (currentTravelStatus.currentLocation) {
+      try {
+        weatherService.setCurrentLocation(currentTravelStatus.currentLocation.lng, currentTravelStatus.currentLocation.lat);
+        const initialWeather = await weatherService.getWeatherByCoordinates(
+          currentTravelStatus.currentLocation.lng,
+          currentTravelStatus.currentLocation.lat
+        );
+        currentTravelStatus.currentWeather = initialWeather;
+        console.log('Initial weather info:', initialWeather);
+      } catch (error) {
+        console.error('Error getting initial weather:', error);
+      }
+    }
+
     console.log('Creating map window, travel data:', travelData);
     createMapWindow(travelData);
   } catch (error) {
@@ -968,6 +1477,9 @@ ipcMain.on('start-journey', async (event, data) => {
       origin: '武汉光谷',
       destination: destination
     };
+
+    // 保存到全局变量
+    globalTravelData = travelData;
 
     console.log('Using default location to create map window, travel data:', travelData);
     createMapWindow(travelData);
@@ -1008,32 +1520,14 @@ ipcMain.on('manual-water-reminder', () => {
 ipcMain.on('manual-fun-reminder', async () => {
   // 生成AI趣味提醒
   const funMessage = await generateFunReminder();
-
-  const notification = {
-    title: 'Fun Reminder',
-    body: funMessage,
-    icon: path.join(__dirname, 'icon.png') // 添加图标路径
-  };
-
-  if (Notification.isSupported()) {
-    new Notification(notification).show();
-  }
+  createPetStatusWindow(funMessage);
 });
 
 // IPC事件处理：显示当前旅程状态
 ipcMain.on('check-journey-status', async () => {
   // 生成AI旅程状态
   const statusMessage = await generateJourneyStatus();
-
-  const notification = {
-    title: 'Journey Status',
-    body: statusMessage,
-    icon: path.join(__dirname, 'icon.png') // 添加图标路径
-  };
-
-  if (Notification.isSupported()) {
-    new Notification(notification).show();
-  }
+  createPetStatusWindow(statusMessage);
 });
 
 // 应用准备就绪时执行
@@ -1054,6 +1548,9 @@ app.whenReady().then(() => {
     createMainWindow();
     createPetWindow(); // 创建宠物窗口
     registerScreenshotListener();
+
+    // 设置ActivityMonitor的createPetStatusWindow函数
+    setCreatePetStatusWindowFunction(createPetStatusWindow);
     activityMonitor = new ActivityMonitor();
   }, 1000);
 }).catch(err => {
@@ -1087,117 +1584,64 @@ app.on('will-quit', () => {
   ipcMain.removeAllListeners('request-travel-info');
 });
 
-// 窗口移动监听器，让宠物跟随吸附的窗口
+// 窗口移动监听器 - 暂时注释掉
+/*
 function setupWindowMoveListener() {
-  // 定期检查吸附窗口是否移动
-  setInterval(() => {
-    if (petWindow && !petWindow.isDestroyed() && petWindow.attachedToWindow) {
-      try {
-        const attachedWindow = BrowserWindow.fromId(petWindow.attachedToWindow.id);
-        
-        if (attachedWindow && !attachedWindow.isDestroyed() && attachedWindow.isVisible()) {
-          // 窗口仍然存在且可见，检查位置是否变化
-          const [winX, winY] = attachedWindow.getPosition();
-          const [winWidth, winHeight] = attachedWindow.getSize();
-          const [petX, petY] = petWindow.getPosition();
-          
-          // 根据吸附类型计算新位置
-          let newX = petX;
-          let newY = petY;
-          let shouldUpdate = false;
-          
-          if (petWindow.attachedToWindow.type === '正上方') {
-            newX = winX + Math.floor((winWidth - petWindow.getSize()[0]) / 2);
-            newY = winY - petWindow.getSize()[1];
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '左边缘') {
-            newX = winX + winWidth;
-            newY = petY;
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '右边缘') {
-            newX = winX - petWindow.getSize()[0];
-            newY = petY;
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '上边缘') {
-            newX = petX;
-            newY = winY + winHeight;
-            shouldUpdate = true;
-          } else if (petWindow.attachedToWindow.type === '下边缘') {
-            newX = petX;
-            newY = winY - petWindow.getSize()[1];
-            shouldUpdate = true;
-          }
-          
-          if (shouldUpdate && (Math.abs(newX - petX) > 1 || Math.abs(newY - petY) > 1)) {
-            petWindow.setPosition(newX, newY);
-            console.log('宠物跟随窗口移动:', { from: [petX, petY], to: [newX, newY] });
-          }
-        } else {
-          // 窗口已关闭或不可见，宠物返回原位置
-          console.log('吸附窗口已关闭，宠物返回原位置');
-          returnToOriginalPosition();
-        }
-      } catch (error) {
-        console.error('检查吸附窗口状态失败:', error);
-        // 出错时也返回原位置
-        returnToOriginalPosition();
-      }
-    }
-  }, 100); // 每100ms检查一次
+  // 由于只进行屏幕边缘吸附，不再需要窗口跟随功能
+  // 保留函数结构以便将来扩展
+  console.log('窗口跟随功能已禁用，只进行屏幕边缘吸附');
+}
+*/
+
+// 清除吸附状态的函数 - 暂时注释掉
+/*
+function clearSnapState() {
+  console.log('清除吸附状态');
+  isSnapped = false;
+  snapInfo = {
+    type: '',
+    position: null,
+    attachedWindow: null
+  };
+  
+  if (petWindow && petWindow.attachedToWindow) {
+    delete petWindow.attachedToWindow;
+  }
+}
+*/
+
+// 设置桌宠状态并启动复原计时器
+function setPetState(emotion) {
+  // 清除之前的计时器
+  if (petStateTimer) {
+    clearTimeout(petStateTimer);
+  }
+
+  currentPetEmotion = emotion;
+  console.log('设置桌宠状态:', emotion);
+
+  // 设置复原计时器
+  petStateTimer = setTimeout(() => {
+    resetPetState();
+  }, PET_STATE_DURATION);
 }
 
-// 宠物返回原位置的函数
-function returnToOriginalPosition() {
+// 重置桌宠状态为初始状态
+function resetPetState() {
   if (petWindow && !petWindow.isDestroyed()) {
     try {
-      const { screen } = require('electron');
-      const primaryDisplay = screen.getPrimaryDisplay();
-      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-      
-      const [petWidth, petHeight] = petWindow.getSize();
-      const targetX = screenWidth - 120;
-      const targetY = screenHeight - 120;
-      
-      // 清除吸附状态
-      delete petWindow.attachedToWindow;
-      
-      // 通知渲染进程开始返回动画
-      petWindow.webContents.send('return-to-original');
-      
-      // 使用动画返回原位置
-      animateToPosition(petWindow, targetX, targetY);
-      
-    } catch (error) {
-      console.error('返回原位置失败:', error);
-    }
-  }
-}
+      // 发送重置状态信号给渲染进程
+      petWindow.webContents.send('reset-emotion');
+      console.log('重置桌宠状态为初始状态');
 
-// 动画移动到指定位置的函数
-function animateToPosition(window, targetX, targetY, duration = 1000) {
-  const [startX, startY] = window.getPosition();
-  const startTime = Date.now();
-  
-  function animate() {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    
-    // 使用缓动函数
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
-    
-    const currentX = startX + (targetX - startX) * easeProgress;
-    const currentY = startY + (targetY - startY) * easeProgress;
-    
-    window.setPosition(Math.round(currentX), Math.round(currentY));
-    
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    } else {
-      console.log('宠物已返回原位置');
-      // 通知渲染进程动画完成
-      window.webContents.send('return-completed');
+      // 清除状态记录
+      currentPetEmotion = null;
+      if (petStateTimer) {
+        clearTimeout(petStateTimer);
+        petStateTimer = null;
+      }
+    } catch (error) {
+      console.error('重置桌宠状态失败:', error);
     }
   }
-  
-  animate();
 }

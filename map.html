@@ -17,6 +17,15 @@
             border: 1px solid #eee;
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
             -webkit-app-region: drag;
+            user-select: none;
+            /* 防止文本选择 */
+        }
+
+        /* 屏蔽系统右键菜单 */
+        body {
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .map-container {
@@ -98,6 +107,39 @@
             font-weight: bold;
         }
 
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            color: #666;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            z-index: 20;
+            -webkit-app-region: no-drag;
+        }
+
+        .close-button:hover {
+            background: rgba(255, 255, 255, 1);
+            color: #e74c3c;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transform: scale(1.1);
+        }
+
+        .close-button:active {
+            transform: scale(0.95);
+        }
+
         .header {
             position: absolute;
             top: 10px;
@@ -112,6 +154,50 @@
             gap: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             -webkit-app-region: no-drag;
+        }
+
+        .weather-display {
+            position: absolute;
+            top: 45px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            -webkit-app-region: no-drag;
+            min-width: 150px;
+        }
+
+        .weather-icon {
+            font-size: 18px;
+        }
+
+        .weather-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .weather-city {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 11px;
+        }
+
+        .weather-desc {
+            color: #34495e;
+            font-size: 10px;
+        }
+
+        .weather-temp {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 12px;
         }
 
         .traveler {
@@ -260,11 +346,21 @@
     <div class="drag-handle" id="dragHandle"></div>
 
     <div class="map-container">
-        <button class="close-btn" id="closeBtn">×</button>
+        <div class="close-button" id="closeBtn">×</div>
 
         <div class="header">
             <span id="time-icon">🌞</span>
             <span id="route-info">武汉 → 北京</span>
+        </div>
+
+        <!-- 天气显示 -->
+        <div class="weather-display" id="weather-display">
+            <div class="weather-icon" id="weather-icon">🌤️</div>
+            <div class="weather-info">
+                <div class="weather-city" id="weather-city">获取中...</div>
+                <div class="weather-desc" id="weather-desc">天气获取中...</div>
+                <div class="weather-temp" id="weather-temp">--°C</div>
+            </div>
         </div>
 
         <div class="weather" id="weather">❄️</div>
@@ -306,6 +402,19 @@
     </div>
 
     <script>
+        // 屏蔽系统右键菜单
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        // 屏蔽文本选择
+        document.addEventListener('selectstart', (e) => {
+            e.preventDefault();
+            return false;
+        });
+
         const closeBtn = document.getElementById('closeBtn');
         const progress = document.getElementById('progress');
         const timeIcon = document.getElementById('time-icon');
@@ -322,6 +431,13 @@
         const resetView = document.getElementById('reset-view');
         const debugState = document.getElementById('debug-state');
         const testMarker = document.getElementById('test-marker');
+
+        // 天气显示元素
+        const weatherDisplay = document.getElementById('weather-display');
+        const weatherIcon = document.getElementById('weather-icon');
+        const weatherCity = document.getElementById('weather-city');
+        const weatherDesc = document.getElementById('weather-desc');
+        const weatherTemp = document.getElementById('weather-temp');
 
 
         // 全局变量存储地图实例和位置信息
@@ -340,8 +456,19 @@
         let totalDistance = 0;
         let traveledDistance = 0;
 
+        // 天气相关变量
+        let currentWeatherData = null;
+        let lastWeatherUpdate = 0;
+        const WEATHER_UPDATE_INTERVAL = 300000; // 5分钟更新一次天气，避免QPS超限
+
         closeBtn.addEventListener('click', () => {
-            window.close();
+            try {
+                require('electron').ipcRenderer.send('hide-map-window');
+            } catch (error) {
+                console.error('Error hiding map window:', error);
+                // 如果IPC失败，则直接关闭窗口
+                window.close();
+            }
         });
 
         // 缩放控件事件监听
@@ -430,6 +557,11 @@
 
             // 初始化高德地图
             await initMap(data);
+
+            // 初始化天气显示
+            setTimeout(() => {
+                initializeMapWeather();
+            }, 2000); // 延迟2秒确保地图加载完成
         });
 
         // 初始化高德地图
@@ -1195,6 +1327,26 @@
                     // 更新状态文本
                     updateStatusText(progress);
 
+                    // 发送位置更新到主进程（用于天气更新）
+                    try {
+                        ipcRenderer.send('travel-position-update', {
+                            lng: currentPos.lng,
+                            lat: currentPos.lat,
+                            progress: progress,
+                            index: window.currentPathIndex,
+                            total: window.routePath.length
+                        });
+
+                        // 检查是否需要更新天气
+                        const now = Date.now();
+                        if (now - lastWeatherUpdate > WEATHER_UPDATE_INTERVAL) {
+                            updateMapWeather(currentPos.lng, currentPos.lat);
+                            lastWeatherUpdate = now;
+                        }
+                    } catch (error) {
+                        console.error('Error sending travel position update:', error);
+                    }
+
                     // 跟随旅行者
                     if (mapInstance) {
                         mapInstance.setCenter(currentPos);
@@ -1323,6 +1475,67 @@
         // 定时更新天气
         setInterval(updateWeather, 30000); // 每30秒更新一次
         updateWeather(); // 初始化天气
+
+        // 地图天气更新函数
+        function updateMapWeather(lng, lat) {
+            try {
+                // 请求主进程获取天气信息
+                ipcRenderer.send('get-weather-for-coordinates', { lng, lat });
+            } catch (error) {
+                console.error('Error requesting weather update:', error);
+            }
+        }
+
+        // 监听主进程返回的天气信息
+        ipcRenderer.on('weather-info-response', (event, weatherData) => {
+            updateWeatherDisplay(weatherData);
+        });
+
+        // 更新天气显示
+        function updateWeatherDisplay(weatherData) {
+            try {
+                if (!weatherData) {
+                    return;
+                }
+
+                currentWeatherData = weatherData;
+
+                // 更新右上角天气图标
+                if (weatherEl && weatherData.emoji) {
+                    weatherEl.textContent = weatherData.emoji;
+                    weatherEl.title = `${weatherData.city} ${weatherData.summary}`;
+                }
+
+                // 更新左上角天气显示面板
+                if (weatherIcon && weatherData.emoji) {
+                    weatherIcon.textContent = weatherData.emoji;
+                }
+
+                if (weatherCity && weatherData.city) {
+                    weatherCity.textContent = weatherData.city;
+                }
+
+                if (weatherDesc && weatherData.description) {
+                    weatherDesc.textContent = weatherData.description;
+                }
+
+                if (weatherTemp && weatherData.temperatureText) {
+                    weatherTemp.textContent = weatherData.temperatureText;
+                }
+            } catch (error) {
+                console.error('Error updating weather display:', error);
+            }
+        }
+
+        // 初始化地图天气（在获取到旅行信息后调用）
+        function initializeMapWeather() {
+            if (travelData && travelData.userLocation && travelData.userLocation.coordinates) {
+                const coords = travelData.userLocation.coordinates;
+                updateMapWeather(coords[0], coords[1]);
+            } else if (window.originCoords) {
+                updateMapWeather(window.originCoords[0], window.originCoords[1]);
+            }
+        }
     </script>
 </body>
 

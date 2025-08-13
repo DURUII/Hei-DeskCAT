@@ -2,6 +2,14 @@ const { app, Notification, BrowserWindow } = require('electron');
 const Store = require('electron-store');
 const { generateFunReminder } = require('./aiService');
 
+// 全局变量，用于存储createPetStatusWindow函数
+let createPetStatusWindowFunction = null;
+
+// 设置createPetStatusWindow函数的函数
+function setCreatePetStatusWindowFunction(func) {
+  createPetStatusWindowFunction = func;
+}
+
 class ActivityMonitor {
   constructor() {
     this.store = new Store();
@@ -92,78 +100,50 @@ class ActivityMonitor {
 
   // 显示不活动提醒
   showInactivityNotification() {
-    const notification = {
-      title: '休息提醒',
-      body: '起来走两步，不然椅子会长你身上',
-      icon: 'icon.png' // 需要提供图标文件
-    };
-
-    if (Notification.isSupported()) {
-      new Notification(notification).show();
+    const message = '🏃‍♂️ 起来走两步，不然椅子会长你身上！';
+    if (createPetStatusWindowFunction) {
+      createPetStatusWindowFunction(message);
     }
   }
 
   // 显示喝水提醒
   showWaterReminder() {
     const messages = [
-      { title: '喝水提醒', body: '再不喝水就要变成仙人掌了🌵' },
-      { title: '健康小贴士', body: '你已经很久没有喝水啦，来杯水吧☕' },
-      { title: '能量补给', body: '水是生命之源，快来补充能量💧' }
+      '🌵 再不喝水就要变成仙人掌了！',
+      '☕ 你已经很久没有喝水啦，来杯水吧～',
+      '💧 水是生命之源，快来补充能量！'
     ];
 
     const message = messages[Math.floor(Math.random() * messages.length)];
 
-    const notification = {
-      title: message.title,
-      body: message.body,
-      icon: 'icon.png' // 需要提供图标文件
-    };
-
-    if (Notification.isSupported()) {
-      new Notification(notification).show();
+    if (createPetStatusWindowFunction) {
+      createPetStatusWindowFunction(message);
     }
-
-    // 同时显示窗口提醒
-    this.showWaterReminderWindow();
   }
 
-  // 显示趣味提醒（使用原生Windows通知）
+  // 显示趣味提醒（使用小旅星窗口）
   async showFunReminder() {
     try {
       // 使用AI生成趣味提醒内容
       const aiMessage = await generateFunReminder();
 
-      const notification = {
-        title: '趣味提醒',
-        body: aiMessage,
-        icon: 'icon.png'
-      };
-
-      // 使用原生Windows通知
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
+      if (createPetStatusWindowFunction) {
+        createPetStatusWindowFunction(aiMessage);
       }
     } catch (error) {
       console.error('Failed to generate AI fun reminder:', error);
       // 出错时使用默认提醒
       const messages = [
-        { title: '趣事分享', body: '哇塞这个好好玩！✨' },
-        { title: '代办事项', body: '已加入代办！✅' },
-        { title: '灵感时刻', body: '脑中突然闪过一个好想法💡' },
-        { title: '轻松一刻', body: '工作之余，记得微笑😊' }
+        '✨ 哇塞这个好好玩！',
+        '✅ 已加入代办！',
+        '💡 脑中突然闪过一个好想法',
+        '😊 工作之余，记得微笑'
       ];
 
       const message = messages[Math.floor(Math.random() * messages.length)];
 
-      const notification = {
-        title: message.title,
-        body: message.body,
-        icon: 'icon.png'
-      };
-
-      // 使用原生Windows通知
-      if (Notification.isSupported()) {
-        new Notification(notification).show();
+      if (createPetStatusWindowFunction) {
+        createPetStatusWindowFunction(message);
       }
     }
   }
@@ -195,4 +175,4 @@ class ActivityMonitor {
   }
 }
 
-module.exports = ActivityMonitor;
+module.exports = { ActivityMonitor, setCreatePetStatusWindowFunction };
