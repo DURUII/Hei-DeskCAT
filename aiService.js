@@ -98,11 +98,11 @@ async function analyzeScreenshot(base64Image) {
 
                     分析规则：
                     1. 如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
-                    2. 如果建议旅行，回应内容中包含且仅包含旅行目的地，不要包含其他内容
+                    2. 如果建议旅行，回应内容中包含且仅包含旅行目的地，不要包含其他内容，旅行目的地应包含城市和景点名
                     3. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等
                     4. 回应应该简短、有趣且富有想象力，不超过20个字
 
-                    请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等markdown关键字：
+                    请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等关键字：
                     {
                     "message": "你的回应内容",
                     "shouldTravel": true/false,
@@ -254,24 +254,41 @@ async function generateFunReminder() {
 }
 
 /**
- * 生成旅程状态描述
+ * 根据地点和天气生成旅程状态描述
+ * @param {Object} locationInfo - 地理位置信息
+ * @param {Object} weatherInfo - 天气信息
  * @returns {Promise<string>} 生成的状态描述
  */
-async function generateJourneyStatus() {
+async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
     // 即使没有配置API Key，也返回默认状态
     try {
+        // 检查参数是否有效
+        if (!locationInfo || !weatherInfo) {
+            console.log("Invalid location or weather info, returning default status");
+            return "正在旅行中...";
+        }
+
         // 如果没有配置API Key，则返回默认状态
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
-            console.log("API Key not configured, returning default status");
+            console.log("API Key not configured, returning default status with location");
+            const cityName = locationInfo.city || "某地";
+            const weatherDesc = weatherInfo.description || "好天气";
+            const temperature = weatherInfo.temperature || "舒适";
+
             const defaultStatuses = [
-                "正在北京天安门广场看升旗仪式🇨🇳",
-                "在故宫里探索历史文化🏯",
-                "于长城上感受雄伟壮丽🏰",
-                "在颐和园中欣赏湖光山色🏞️",
-                "在胡同里体验老北京风情🏘️"
+                `正在${cityName}欣赏美丽风景✨`,
+                `在${cityName}感受${weatherDesc}🌤️`,
+                `正于${cityName}体验${temperature}度的${weatherDesc}😊`,
+                `${cityName}的${weatherDesc}太适合旅行啦🌞`,
+                `在${cityName}看风景，${temperature}度刚刚好😊`
             ];
             return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
         }
+
+        // 确保参数有默认值
+        const cityName = locationInfo.city || "某城市";
+        const weatherDesc = weatherInfo.description || "晴朗天气";
+        const temperature = weatherInfo.temperature || "舒适";
 
         const completion = await openai.chat.completions.create({
             model: "qwen-plus",
@@ -282,29 +299,55 @@ async function generateJourneyStatus() {
                 },
                 {
                     role: "user",
-                    content: "我的小旅星现在在哪里？在做什么？"
+                    content: `我的小旅星现在在${cityName}，天气是${weatherDesc}，温度${temperature}度。它在做什么？以下是几个示例：
+                                正在${cityName}欣赏美丽风景✨,
+                                在${cityName}感受${weatherDesc}🌤️,
+                                正于${cityName}体验${temperature}度的${weatherDesc}😊,
+                                ${cityName}的${weatherDesc}太适合旅行啦,
+                                在${cityName}看风景，${temperature}度刚刚好😊`
                 }
             ],
             max_tokens: 50
         });
 
-        return completion.choices[0].message.content.trim();
+        let status = completion.choices[0].message.content.trim();
+
+        // 确保不超过20个字
+        if (status.length > 20) {
+            status = status.substring(0, 20);
+        }
+
+        // 确保状态不为空
+        if (!status) {
+            status = `正在${cityName}旅行中...`;
+        }
+
+        return status;
     } catch (error) {
-        console.error('Error occurred during AI journey status generation:', error);
+        console.error('Error occurred during AI journey status generation with location:', error);
         // 出错时返回默认状态
-        const defaultStatuses = [
-            "正在北京天安门广场看升旗仪式🇨🇳",
-            "在故宫里探索历史文化🏯",
-            "于长城上感受雄伟壮丽🏰",
-            "在颐和园中欣赏湖光山色🏞️",
-            "在胡同里体验老北京风情🏘️"
-        ];
-        return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
+        try {
+            const cityName = (locationInfo && locationInfo.city) || "某地";
+            const weatherDesc = (weatherInfo && weatherInfo.description) || "好天气";
+            const temperature = (weatherInfo && weatherInfo.temperature) || "舒适";
+
+            const defaultStatuses = [
+                `正在${cityName}欣赏美丽风景✨`,
+                `在${cityName}感受${weatherDesc}🌤️`,
+                `正于${cityName}体验${temperature}度的${weatherDesc}😊`,
+                `${cityName}的${weatherDesc}太适合旅行啦🌞`,
+                `在${cityName}看风景，${temperature}度刚刚好😊`
+            ];
+            return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
+        } catch (defaultError) {
+            console.error('Error generating default status:', defaultError);
+            return "正在旅行中...";
+        }
     }
 }
 
 module.exports = {
     analyzeScreenshot,
     generateFunReminder,
-    generateJourneyStatus
+    generateJourneyStatusWithLocation
 };

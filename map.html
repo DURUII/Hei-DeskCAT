@@ -86,8 +86,6 @@
             transform: scale(0.95);
         }
 
-
-
         .location-info {
             position: absolute;
             bottom: 50px;
@@ -198,6 +196,21 @@
             color: #e74c3c;
             font-weight: bold;
             font-size: 12px;
+        }
+
+        .travel-status {
+            position: absolute;
+            top: 110px;  /* 从90px调整为110px，避免遮挡天气显示 */
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            -webkit-app-region: no-drag;
+            min-width: 150px;
+            display: none;
         }
 
         .traveler {
@@ -362,6 +375,11 @@
                 <div class="weather-temp" id="weather-temp">--°C</div>
             </div>
         </div>
+        
+        <!-- 旅行状态显示 -->
+        <div class="travel-status" id="travel-status">
+            正在旅行中...
+        </div>
 
         <div class="weather" id="weather">❄️</div>
 
@@ -373,8 +391,6 @@
             <div class="zoom-control" id="debug-state" title="调试状态" style="background: #ff6b6b;">🐛</div>
             <div class="zoom-control" id="test-marker" title="测试标记" style="background: #4CAF50;">🧪</div>
         </div>
-
-
 
         <!-- 位置信息 -->
         <div class="location-info" id="location-info">
@@ -438,7 +454,9 @@
         const weatherCity = document.getElementById('weather-city');
         const weatherDesc = document.getElementById('weather-desc');
         const weatherTemp = document.getElementById('weather-temp');
-
+        
+        // 旅行状态显示元素
+        const travelStatus = document.getElementById('travel-status');
 
         // 全局变量存储地图实例和位置信息
         let mapInstance = null;
@@ -1491,6 +1509,11 @@
             updateWeatherDisplay(weatherData);
         });
 
+        // 监听主进程返回的旅行状态信息
+        ipcRenderer.on('travel-status-update', (event, status) => {
+            updateTravelStatusDisplay(status);
+        });
+
         // 更新天气显示
         function updateWeatherDisplay(weatherData) {
             try {
@@ -1524,6 +1547,20 @@
                 }
             } catch (error) {
                 console.error('Error updating weather display:', error);
+            }
+        }
+
+        // 更新旅行状态显示
+        function updateTravelStatusDisplay(status) {
+            try {
+                if (travelStatus && status) {
+                    travelStatus.textContent = status;
+                    travelStatus.style.display = 'block';
+                } else if (travelStatus) {
+                    travelStatus.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error updating travel status display:', error);
             }
         }
 

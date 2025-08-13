@@ -4,7 +4,7 @@ require('dotenv').config();
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
 const path = require('path');
 const { ActivityMonitor, setCreatePetStatusWindowFunction } = require('./activityMonitor');
-const { analyzeScreenshot, generateFunReminder, generateJourneyStatus } = require('./aiService');
+const { analyzeScreenshot, generateFunReminder } = require('./aiService');
 const AMapService = require('./amapService');
 const weatherService = require('./weatherService');
 
@@ -60,7 +60,9 @@ let currentTravelStatus = {
   totalDistance: 0,
   traveledDistance: 0,
   progress: 0,
-  lastWeatherUpdateTime: 0
+  lastWeatherUpdateTime: 0,
+  currentStatus: null,
+  hasInitialStatusGenerated: false  // 添加初始状态生成标记
 };
 
 // 小旅星窗口管理
@@ -354,6 +356,27 @@ function createPetWindow() {
         const now = Date.now();
         const weatherUpdateInterval = 300000; // 5分钟更新一次
 
+        // 确保始终有一个旅行状态显示，但避免重复初始化
+        if (!currentTravelStatus.currentStatus && !currentTravelStatus.hasInitialStatusGenerated) {
+          // 如果还没有旅行状态，尝试生成一个
+          try {
+            console.log('Generating initial travel status for location:', data.lng, data.lat);
+            const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+            const { generateJourneyStatusWithLocation } = require('./aiService');
+            const status = await generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
+            currentTravelStatus.currentStatus = status;
+            currentTravelStatus.hasInitialStatusGenerated = true; // 标记已生成初始状态
+            console.log('Initial AI Generated travel status:', status);
+
+            // 向地图窗口发送旅行状态
+            if (mapWindow && !mapWindow.isDestroyed()) {
+              mapWindow.webContents.send('travel-status-update', status);
+            }
+          } catch (error) {
+            console.error('Error generating initial travel status:', error);
+          }
+        }
+
         if (now - currentTravelStatus.lastWeatherUpdateTime > weatherUpdateInterval) {
           try {
             // 获取当前位置的天气信息
@@ -361,6 +384,21 @@ function createPetWindow() {
             currentTravelStatus.currentWeather = weatherInfo;
             currentTravelStatus.lastWeatherUpdateTime = now;
             console.log(`Travel weather updated: ${weatherInfo.city} - ${weatherInfo.summary}`);
+
+            // 使用AI生成基于位置和天气的旅行状态
+            try {
+              const { generateJourneyStatusWithLocation } = require('./aiService');
+              const status = await generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
+              currentTravelStatus.currentStatus = status;
+              console.log('AI Generated travel status:', status);
+
+              // 向地图窗口发送旅行状态
+              if (mapWindow && !mapWindow.isDestroyed()) {
+                mapWindow.webContents.send('travel-status-update', status);
+              }
+            } catch (aiError) {
+              console.error('Error generating AI travel status:', aiError);
+            }
           } catch (error) {
             console.error('Error updating travel weather:', error);
           }
@@ -380,6 +418,29 @@ function createPetWindow() {
     event.reply('travel-status-info', currentTravelStatus);
   });
 
+  // 监听显示旅行状态事件
+  ipcMain.on('show-travel-status', async (event) => {
+    try {
+      console.log('Show travel status requested');
+
+      // 检查是否有进行中的旅行
+      if (!currentTravelStatus.isInProgress) {
+        createPetStatusWindow('还没有开始旅行呢！按F2截图开始新的旅程吧✈️');
+        return;
+      }
+
+      // 使用AI生成的基于位置和天气的旅行状态
+      if (currentTravelStatus.currentStatus) {
+        createPetStatusWindow(currentTravelStatus.currentStatus);
+      } else {
+        createPetStatusWindow('正在旅行中...');
+      }
+    } catch (error) {
+      console.error('Error showing travel status:', error);
+      createPetStatusWindow('无法获取旅行状态信息');
+    }
+  });
+
   // 监听获取当前天气事件
   ipcMain.on('get-current-weather', async (event) => {
     try {
@@ -389,53 +450,6 @@ function createPetWindow() {
     } catch (error) {
       console.error('Error getting current weather:', error);
       event.reply('current-weather-info', weatherService.getDefaultWeather());
-    }
-  });
-
-  // 监听显示旅行状态事件
-  ipcMain.on('show-travel-status', async (event) => {
-    try {
-      console.log('Show travel status requested');
-
-      if (!currentTravelStatus.isInProgress) {
-        createPetStatusWindow('当前没有进行中的旅行\n按F2截图开始新的旅行！');
-        return;
-      }
-
-      let statusMessage = '🚀 正在旅行中...\n';
-
-      // 添加进度信息
-      if (currentTravelStatus.progress) {
-        statusMessage += `进度：${Math.round(currentTravelStatus.progress)}%\n`;
-      }
-
-      // 添加当前天气信息
-      if (currentTravelStatus.currentWeather) {
-        const weather = currentTravelStatus.currentWeather;
-        statusMessage += `${weather.emoji} ${weather.city}\n`;
-        statusMessage += `${weather.description} ${weather.temperatureText}`;
-
-        if (weather.windpower) {
-          statusMessage += ` | ${weather.windpower}级风`;
-        }
-      } else {
-        // 如果没有天气信息，尝试获取当前天气
-        try {
-          const weatherInfo = await weatherService.getCurrentWeather();
-          if (weatherInfo) {
-            statusMessage += `${weatherInfo.emoji} ${weatherInfo.city}\n`;
-            statusMessage += `${weatherInfo.description} ${weatherInfo.temperatureText}`;
-          }
-        } catch (error) {
-          console.error('Error getting weather for status:', error);
-          statusMessage += '🌤️ 天气信息获取中...';
-        }
-      }
-
-      createPetStatusWindow(statusMessage);
-    } catch (error) {
-      console.error('Error showing travel status:', error);
-      createPetStatusWindow('无法获取旅行状态信息');
     }
   });
 
@@ -624,7 +638,7 @@ function createPetWindow() {
     try {
       // 保存当前透明度值
       currentPetTransparency = transparency;
-      
+
       if (petWindow && !petWindow.isDestroyed()) {
         // 使用CSS样式而不是Electron的setOpacity方法来控制透明度
         // 将百分比转换为0-1的范围
@@ -1459,7 +1473,10 @@ ipcMain.on('start-journey', async (event, data) => {
       lastCity: userLocation.city,
       totalDistance: 0,
       traveledDistance: 0,
-      progress: 0
+      progress: 0,
+      lastWeatherUpdateTime: 0,
+      currentStatus: null,
+      hasInitialStatusGenerated: false  // 重置初始状态生成标记
     };
 
     // 获取起点天气信息
@@ -1535,9 +1552,43 @@ ipcMain.on('manual-fun-reminder', async () => {
 
 // IPC事件处理：显示当前旅程状态
 ipcMain.on('check-journey-status', async () => {
-  // 生成AI旅程状态
-  const statusMessage = await generateJourneyStatus();
-  createPetStatusWindow(statusMessage);
+  // 检查是否有进行中的旅行
+  if (!currentTravelStatus.isInProgress) {
+    createPetStatusWindow('还没有开始旅行呢！按F2截图开始新的旅程吧✈️');
+    return;
+  }
+
+  // 检查是否有AI生成的基于位置和天气的旅行状态
+  if (currentTravelStatus.currentStatus) {
+    createPetStatusWindow(currentTravelStatus.currentStatus);
+  } else {
+    // 如果没有AI生成的状态，则使用默认状态
+    createPetStatusWindow('正在旅行中...');
+  }
+});
+
+// 监听关闭地图窗口事件，重置旅行状态
+ipcMain.on('close-map-window', () => {
+  console.log('Closing map window and resetting travel status');
+  if (mapWindow && !mapWindow.isDestroyed()) {
+    mapWindow.close();
+  }
+
+  // 重置旅行状态
+  currentTravelStatus = {
+    isInProgress: false,
+    currentLocation: null,
+    currentWeather: null,
+    lastCity: null,
+    totalDistance: 0,
+    traveledDistance: 0,
+    progress: 0,
+    lastWeatherUpdateTime: 0,
+    currentStatus: null,
+    hasInitialStatusGenerated: false  // 重置初始状态生成标记
+  };
+
+  globalTravelData = null;
 });
 
 // 应用准备就绪时执行

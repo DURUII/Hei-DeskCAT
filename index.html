@@ -195,7 +195,7 @@
 
     <!-- 桌面宠物主体 -->
     <div class="pet-container" id="pet">
-                        <img class="pet-image" src="assets/imgs/罗小黑的生活/pet.gif" alt="桌宠" />
+        <img class="pet-image" src="assets/imgs/罗小黑的生活/pet.gif" alt="桌宠" />
     </div>
 
     <script>
@@ -211,7 +211,7 @@
         // 点击宠物显示当前状态
         pet.addEventListener('click', () => {
             // 发送IPC消息查看旅程状态
-            require('electron').ipcRenderer.send('check-journey-status');
+            require('electron').ipcRenderer.send('manual-fun-reminder');
         });
 
         // 按钮事件
