@@ -45,6 +45,9 @@ let petStateTimer = null;
 let currentPetEmotion = null;
 const PET_STATE_DURATION = 5000; // 状态持续时间（毫秒）
 
+// 添加透明度状态变量
+let currentPetTransparency = 100;
+
 // 全局旅行数据
 let globalTravelData = null;
 
@@ -618,15 +621,19 @@ function createPetWindow() {
 
   // 处理透明度调节
   ipcMain.on('set-pet-transparency', (event, transparency) => {
-    console.log('Setting pet transparency to:', transparency);
     try {
+      // 保存当前透明度值
+      currentPetTransparency = transparency;
+      
       if (petWindow && !petWindow.isDestroyed()) {
+        // 使用CSS样式而不是Electron的setOpacity方法来控制透明度
         // 将百分比转换为0-1的范围
         const opacity = transparency / 100;
-        petWindow.setOpacity(opacity);
-        console.log('Pet window opacity set to:', opacity);
+        petWindow.webContents.executeJavaScript(`
+          // 通过修改根元素的样式来控制透明度，避免影响其他样式
+          document.documentElement.style.opacity = ${opacity};
+        `);
       } else {
-        console.log('Pet window not available for transparency setting');
       }
     } catch (error) {
       console.error('Error setting pet transparency:', error);
@@ -635,7 +642,6 @@ function createPetWindow() {
 
   // 打开透明度控制窗口
   ipcMain.on('open-transparency-window', (event) => {
-    console.log('Opening transparency control window');
     try {
       // 关闭已存在的透明度窗口
       if (transparencyWindow && !transparencyWindow.isDestroyed()) {
@@ -672,6 +678,11 @@ function createPetWindow() {
 
       newTransparencyWindow.loadFile('transparencyWindow.html');
 
+      // 窗口加载完成后发送当前透明度值
+      newTransparencyWindow.webContents.once('dom-ready', () => {
+        newTransparencyWindow.webContents.send('current-pet-transparency', currentPetTransparency);
+      });
+
       newTransparencyWindow.webContents.on('crashed', () => {
         console.error('Transparency window crashed');
         transparencyWindow = null;
@@ -684,11 +695,10 @@ function createPetWindow() {
 
       newTransparencyWindow.on('closed', () => {
         transparencyWindow = null;
-        console.log('Transparency window closed, global variable cleared');
+        console.log('Transparency window closed. Final transparency value:', currentPetTransparency);
       });
 
       transparencyWindow = newTransparencyWindow;
-      console.log('Transparency window created successfully');
     } catch (error) {
       console.error('Error creating transparency window:', error);
     }

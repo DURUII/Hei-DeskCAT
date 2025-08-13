@@ -104,6 +104,13 @@
 
             console.log('Transparency window script loaded successfully');
 
+            // 接收当前透明度值
+            ipcRenderer.on('current-pet-transparency', (event, transparency) => {
+                console.log('Received current pet transparency:', transparency);
+                transparencySlider.value = transparency;
+                transparencyValue.textContent = transparency + '%';
+            });
+
             // 通知右键菜单透明度窗口已打开
             try {
                 ipcRenderer.send('transparency-window-opened');
