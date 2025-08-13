@@ -200,7 +200,8 @@
 
         .travel-status {
             position: absolute;
-            top: 110px;  /* 从90px调整为110px，避免遮挡天气显示 */
+            top: 110px;
+            /* 从90px调整为110px，避免遮挡天气显示 */
             left: 10px;
             z-index: 10;
             background: rgba(255, 255, 255, 0.9);
@@ -375,7 +376,7 @@
                 <div class="weather-temp" id="weather-temp">--°C</div>
             </div>
         </div>
-        
+
         <!-- 旅行状态显示 -->
         <div class="travel-status" id="travel-status">
             正在旅行中...
@@ -454,7 +455,7 @@
         const weatherCity = document.getElementById('weather-city');
         const weatherDesc = document.getElementById('weather-desc');
         const weatherTemp = document.getElementById('weather-temp');
-        
+
         // 旅行状态显示元素
         const travelStatus = document.getElementById('travel-status');
 

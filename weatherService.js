@@ -51,8 +51,12 @@ class WeatherService {
     // 逆地理编码 - 坐标转地址
     async reverseGeocode(lng, lat) {
         try {
+            // 将坐标省略到三位小数，防止由于坐标变化导致重复请求
+            const roundedLng = Math.round(lng * 1000) / 1000;
+            const roundedLat = Math.round(lat * 1000) / 1000;
+
             // 检查缓存
-            const cacheKey = `geocode_${lng}_${lat}`;
+            const cacheKey = `geocode_${roundedLng}_${roundedLat}`;
             const cached = this.weatherCache.get(cacheKey);
             if (cached && Date.now() - cached.timestamp < this.cacheExpiration) {
                 return cached.data;

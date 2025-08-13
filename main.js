@@ -32,6 +32,10 @@ let transparencyWindow = null; // 添加右键菜单窗口跟踪
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
 
+// Promise缓存，防止重复请求
+let weatherRequestCache = new Map(); // 天气请求缓存
+let travelStatusRequestCache = new Map(); // 旅行状态请求缓存
+
 // 吸附状态管理 - 暂时注释掉
 // let isSnapped = false;
 // let snapInfo = {
@@ -339,6 +343,56 @@ function createPetWindow() {
     event.reply('pet-state-info', stateInfo);
   });
 
+  // 使用Promise缓存获取天气信息，防止重复请求
+  async function getWeatherWithCache(lng, lat) {
+    // 将坐标省略到三位小数，防止由于坐标变化导致重复请求
+    const roundedLng = Math.round(lng * 1000) / 1000;
+    const roundedLat = Math.round(lat * 1000) / 1000;
+    const cacheKey = `${roundedLng}_${roundedLat}`;
+
+    // 检查是否有进行中的请求
+    if (weatherRequestCache.has(cacheKey)) {
+      console.log('Weather request already in progress, waiting for result...');
+      return await weatherRequestCache.get(cacheKey);
+    }
+
+    // 创建新的请求Promise
+    const weatherPromise = weatherService.getWeatherByCoordinates(lng, lat);
+    weatherRequestCache.set(cacheKey, weatherPromise);
+
+    try {
+      const result = await weatherPromise;
+      return result;
+    } finally {
+      // 请求完成后清理缓存
+      weatherRequestCache.delete(cacheKey);
+    }
+  }
+
+  // 使用Promise缓存生成旅行状态，防止重复请求
+  async function generateTravelStatusWithCache(weatherInfo) {
+    const cacheKey = `${weatherInfo.city}_${weatherInfo.weather}_${weatherInfo.temperature}`;
+
+    // 检查是否有进行中的请求
+    if (travelStatusRequestCache.has(cacheKey)) {
+      console.log('Travel status generation already in progress, waiting for result...');
+      return await travelStatusRequestCache.get(cacheKey);
+    }
+
+    // 创建新的请求Promise
+    const { generateJourneyStatusWithLocation } = require('./aiService');
+    const statusPromise = generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
+    travelStatusRequestCache.set(cacheKey, statusPromise);
+
+    try {
+      const result = await statusPromise;
+      return result;
+    } finally {
+      // 请求完成后清理缓存
+      travelStatusRequestCache.delete(cacheKey);
+    }
+  }
+
   // 监听旅行位置更新事件
   ipcMain.on('travel-position-update', async (event, data) => {
     try {
@@ -361,9 +415,8 @@ function createPetWindow() {
           // 如果还没有旅行状态，尝试生成一个
           try {
             console.log('Generating initial travel status for location:', data.lng, data.lat);
-            const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
-            const { generateJourneyStatusWithLocation } = require('./aiService');
-            const status = await generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
+            const weatherInfo = await getWeatherWithCache(data.lng, data.lat);
+            const status = await generateTravelStatusWithCache(weatherInfo);
             currentTravelStatus.currentStatus = status;
             currentTravelStatus.hasInitialStatusGenerated = true; // 标记已生成初始状态
             console.log('Initial AI Generated travel status:', status);
@@ -380,15 +433,14 @@ function createPetWindow() {
         if (now - currentTravelStatus.lastWeatherUpdateTime > weatherUpdateInterval) {
           try {
             // 获取当前位置的天气信息
-            const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+            const weatherInfo = await getWeatherWithCache(data.lng, data.lat);
             currentTravelStatus.currentWeather = weatherInfo;
             currentTravelStatus.lastWeatherUpdateTime = now;
             console.log(`Travel weather updated: ${weatherInfo.city} - ${weatherInfo.summary}`);
 
             // 使用AI生成基于位置和天气的旅行状态
             try {
-              const { generateJourneyStatusWithLocation } = require('./aiService');
-              const status = await generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
+              const status = await generateTravelStatusWithCache(weatherInfo);
               currentTravelStatus.currentStatus = status;
               console.log('AI Generated travel status:', status);
 
@@ -461,7 +513,7 @@ function createPetWindow() {
         return;
       }
 
-      const weatherInfo = await weatherService.getWeatherByCoordinates(data.lng, data.lat);
+      const weatherInfo = await getWeatherWithCache(data.lng, data.lat);
 
       // 发送天气信息回地图窗口
       if (mapWindow && !mapWindow.isDestroyed()) {
@@ -1483,7 +1535,7 @@ ipcMain.on('start-journey', async (event, data) => {
     if (currentTravelStatus.currentLocation) {
       try {
         weatherService.setCurrentLocation(currentTravelStatus.currentLocation.lng, currentTravelStatus.currentLocation.lat);
-        const initialWeather = await weatherService.getWeatherByCoordinates(
+        const initialWeather = await getWeatherWithCache(
           currentTravelStatus.currentLocation.lng,
           currentTravelStatus.currentLocation.lat
         );
