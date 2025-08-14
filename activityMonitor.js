@@ -2,12 +2,18 @@ const { app, Notification, BrowserWindow } = require('electron');
 const Store = require('electron-store');
 const { generateFunReminder } = require('./aiService');
 
-// 全局变量，用于存储createPetStatusWindow函数
+// 全局变量：小旅星文本弹窗与喝水提醒弹窗创建函数
 let createPetStatusWindowFunction = null;
+let createWaterReminderWindowFunction = null;
 
 // 设置createPetStatusWindow函数的函数
 function setCreatePetStatusWindowFunction(func) {
   createPetStatusWindowFunction = func;
+}
+
+// 设置创建喝水提醒窗口函数
+function setCreateWaterReminderWindowFunction(func) {
+  createWaterReminderWindowFunction = func;
 }
 
 class ActivityMonitor {
@@ -116,7 +122,10 @@ class ActivityMonitor {
 
     const message = messages[Math.floor(Math.random() * messages.length)];
 
-    if (createPetStatusWindowFunction) {
+    // 优先显示交互式喝水提醒弹窗；如果未注入则回退到小旅星文本弹窗
+    if (createWaterReminderWindowFunction) {
+      createWaterReminderWindowFunction();
+    } else if (createPetStatusWindowFunction) {
       createPetStatusWindowFunction(message);
     }
   }
@@ -175,4 +184,4 @@ class ActivityMonitor {
   }
 }
 
-module.exports = { ActivityMonitor, setCreatePetStatusWindowFunction };
+module.exports = { ActivityMonitor, setCreatePetStatusWindowFunction, setCreateWaterReminderWindowFunction };

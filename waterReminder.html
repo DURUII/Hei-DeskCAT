@@ -14,6 +14,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            -webkit-app-region: drag; /* 允许拖动窗口 */
         }
         
         .reminder-container {
@@ -23,25 +24,51 @@
             border-radius: 15px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             border: 1px solid #eee;
-            width: 250px;
+            width: 580px;
+            height: 460px;
+            position: relative;
+            overflow: hidden;
         }
         
-        .water-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-            animation: wave 1s infinite ease-in-out;
+        .main-image {
+            width: 160px;
+            height: 180px;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto 10px;
+            transition: transform 0.2s ease;
+            position: relative;
+            z-index: 2;
+            -webkit-app-region: no-drag;
         }
         
         .message {
             font-size: 16px;
             color: #333;
             margin: 0 0 15px 0;
+            transition: transform 0.2s ease;
+            position: relative;
+            z-index: 2;
+            -webkit-app-region: no-drag;
         }
         
-        .action-buttons {
+        /* 独立的按钮层，脱离容器裁剪限制，可越界移动 */
+        .buttons-layer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 80px;
             display: flex;
-            gap: 10px;
             justify-content: center;
+            gap: 10px; /* 保持按钮间距 */
+            z-index: 99999; /* 远高于容器与系统遮罩 */
+            pointer-events: none; /* 层不拦截事件 */
+        }
+        .buttons-layer .action-button { pointer-events: auto; }
+        .buttons-layer .action-button { -webkit-app-region: no-drag; }
+        .buttons-layer .action-button.cancel {
+            transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s;
+            will-change: transform;
         }
         
         .action-button {
@@ -68,69 +95,219 @@
         .action-button.cancel:hover {
             background: #e0e0e0;
         }
-        
-        @keyframes wave {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+
+        .yes-screen {
+            width: 420px;
+            height: 520px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            border: 1px solid #eee;
         }
-        
-        .water-svg {
-            width: 60px;
+
+        .yes-text {
+            font-size: 18px;
+            margin: 40px 0 12px;
+            color: #333;
+        }
+
+        .yes-image {
+            width: 200px;
+            height: 200px;
+            object-fit: contain;
+        }
+
+        /* 水波层 */
+        .water-layer {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 14%;
+            background: linear-gradient(180deg, rgba(74,108,247,0.28) 0%, rgba(74,108,247,0.42) 100%);
+            transition: height 0.4s ease;
+            overflow: hidden;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .water-wave {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 200%;
             height: 60px;
-            margin: 0 auto 15px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0,49 C150,149 350,-49 600,49 C850,149 1050,-49 1200,49 L1200,120 L0,120 Z" fill="%23ffffff55"/></svg>') repeat-x;
+            background-size: 50% 60px;
+            animation: wave 4s linear infinite;
+            opacity: 0.5;
         }
+        @keyframes wave {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* 顶部关闭按钮 */
+        .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #f3f3f3;
+            border: 1px solid #e5e5e5;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            font-weight: bold;
+            z-index: 3;
+            -webkit-app-region: no-drag;
+        }
+        .close-btn:hover { background: #e9e9e9; }
     </style>
 </head>
 <body>
     <div class="reminder-container">
-        <svg class="water-svg" viewBox="0 0 100 100">
-            <path d="M30,20 Q50,5 70,20 Q85,40 70,70 Q50,95 30,70 Q15,40 30,20" fill="#4a6cf7" />
-            <path d="M40,30 Q50,20 60,30 Q70,45 60,60 Q50,75 40,60 Q30,45 40,30" fill="#6a8cff" />
-        </svg>
-        <p class="message">该喝水啦！</p>
-        <div class="action-buttons">
-            <button class="action-button" id="confirmButton">已喝水</button>
-            <button class="action-button cancel" id="laterButton">稍后提醒</button>
+        <button class="close-btn" id="close">×</button>
+        <img id="mainImage" class="main-image" src="assets/imgs/罗小黑的生活/猫头偷看.gif" alt="reminder">
+        <p class="message" id="question">该喝水啦！</p>
+        <div class="water-layer" id="water">
+            <div class="water-wave"></div>
         </div>
+    </div>
+    <div class="buttons-layer">
+        <button class="action-button" id="yes" style="transform-origin:center">好，喝水</button>
+        <button class="action-button cancel" id="no" style="transform-origin:left">不喝</button>
     </div>
     
     <script>
-        const confirmButton = document.getElementById('confirmButton');
-        const laterButton = document.getElementById('laterButton');
-        
-        // 模拟水位随系统音量变化的动效
-        function updateWaterLevel() {
-            // 这里模拟音量变化，实际应该获取系统音量
-            const volume = Math.random(); // 模拟音量 0-1
-            
-            // 在实际应用中，这里会根据真实音量调整SVG水位
+        const yesButton = document.getElementById("yes");
+        const noButton = document.getElementById("no");
+        const questionText = document.getElementById("question");
+        const mainImage = document.getElementById("mainImage");
+        const water = document.getElementById("water");
+        const closeBtn = document.getElementById("close");
+
+        const params = new URLSearchParams(window.location.search);
+        let username = params.get("name");
+
+        // 限制用户名长度，避免页面样式崩坏
+        const maxLength = 20;
+        const safeUsername = username ? username.substring(0, maxLength) : "";
+
+        if (safeUsername) {
+          questionText.innerText = `该喝水啦，${safeUsername}！`;
         }
-        
-        // 定期更新水位显示
-        setInterval(updateWaterLevel, 1000);
-        
-        // 点击确认按钮
-        confirmButton.addEventListener('click', () => {
-            // 发送确认消息到主进程
-            const { ipcRenderer } = require('electron');
-            ipcRenderer.send('water-confirmed');
-            
-            // 关闭窗口
-            window.close();
+
+        let clickCount = 0; // 记录点击 No 的次数
+
+        // No 按钮的文字变化（情绪渐变 10 阶）
+        const noTexts = [
+          "？你认真的吗…",
+          "要不再想想？",
+          "不许选这个！",
+          "我会很伤心…",
+          "不行:(",
+          "再给个面子嘛~",
+          "真的不行！",
+          "拜托啦~",
+          "喝口再走～",
+          "就一小口！"
+        ];
+
+        // 表情梯度映射（点击次数 -> 表情）
+        function updateExpressionByClicks(n) {
+          if (n <= 2) {
+            mainImage.src = "assets/imgs/罗小黑的生活/猫头偷看.gif"; // 俏皮试探
+          } else if (n <= 4) {
+            mainImage.src = "assets/imgs/罗小黑的生活/思考并怀疑.gif"; // 思考疑惑
+          } else if (n <= 6) {
+            mainImage.src = "assets/imgs/罗小黑的生活/好复杂.gif"; // 复杂无措
+          } else if (n <= 8) {
+            mainImage.src = "assets/imgs/罗小黑的生活/哼不理你了.gif"; // 小傲娇
+          } else if (n < 10) {
+            mainImage.src = "assets/imgs/罗小黑的生活/生气替你出头.gif"; // 生气
+          } else {
+            mainImage.src = "assets/imgs/罗小黑的生活/困死了.gif"; // 奄奄一息
+          }
+        }
+
+        // No 按钮点击事件（模仿捣蛋鹅）
+        noButton.addEventListener("click", function () {
+          clickCount++;
+
+          // 让 Yes 逐步变大（更柔和）
+          const yesSize = Math.min(1 + clickCount * 0.18, 2.3);
+          yesButton.style.transform = `scale(${yesSize})`;
+
+          // 让 No 按钮逐步逃离窗口（向右移动直到完全不可见）
+          const offRight = Math.floor(window.innerWidth / 2) + 480; // 逃逸上限
+          const step = Math.max(60 - clickCount * 4, 24); // 前期快一点，后期更柔和
+          const noOffset = Math.min((clickCount * step) ** 1.05, offRight);
+          noButton.style.transform = `translateX(${noOffset}px)`;
+
+          // 让图片和文字保持原位，不随水位上升
+          mainImage.style.transform = 'translateY(0)';
+          questionText.style.transform = 'translateY(0)';
+
+          // 文案渐变（最多 10 次）
+          if (clickCount <= noTexts.length) {
+            noButton.innerText = noTexts[clickCount - 1];
+          }
+
+          // 表情渐变
+          updateExpressionByClicks(clickCount);
+
+          // 去掉水位上升逻辑，维持固定浅水装饰
+
+          // 达到顶峰时的文案与按钮文案
+          if (clickCount >= 10) {
+            questionText.innerText = '啊我死了…快喝水！';
+            yesButton.innerText = '复活';
+          }
         });
-        
-        // 点击稍后提醒按钮
-        laterButton.addEventListener('click', () => {
-            // 发送稍后提醒消息到主进程
-            const { ipcRenderer } = require('electron');
-            ipcRenderer.send('water-delayed');
-            
-            // 关闭窗口
-            window.close();
+
+        // Yes 按钮点击后，显示成功画面，然后关闭
+        yesButton.addEventListener("click", function () {
+          const successText = `喝水最健康！💧 ${safeUsername ? safeUsername : ''}`.trim();
+
+          document.body.innerHTML = `
+            <div class="yes-screen">
+                <h1 class="yes-text">${successText}</h1>
+                <img src="assets/imgs/罗小黑的生活/给你花花.gif" alt="good" class="yes-image">
+                <div style="margin-top: 16px;">
+                  <button class="action-button cancel" id="dismissBtn">退下吧</button>
+                </div>
+            </div>
+          `;
+
+          document.body.style.overflow = "hidden";
+
+          const { ipcRenderer } = require('electron');
+          const finish = () => { ipcRenderer.send('water-confirmed'); window.close(); };
+
+          // 手动点击“退下吧”
+          setTimeout(() => {
+            const btn = document.getElementById('dismissBtn');
+            if (btn) btn.addEventListener('click', finish);
+          }, 50);
+
+          // 仅点击“退下吧”按钮才关闭窗口
         });
-        
-        // 初始化
-        updateWaterLevel();
+
+        // 右上角关闭按钮 = 稍后提醒
+        closeBtn.addEventListener('click', () => {
+          const { ipcRenderer } = require('electron');
+          ipcRenderer.send('water-delayed');
+          window.close();
+        });
     </script>
 </body>
 </html>

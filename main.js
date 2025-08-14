@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
 const path = require('path');
-const { ActivityMonitor, setCreatePetStatusWindowFunction } = require('./activityMonitor');
+const { ActivityMonitor, setCreatePetStatusWindowFunction, setCreateWaterReminderWindowFunction } = require('./activityMonitor');
 const { analyzeScreenshot, generateFunReminder } = require('./aiService');
 const AMapService = require('./amapService');
 const weatherService = require('./weatherService');
@@ -1258,10 +1258,55 @@ function createBubbleWindow(message) {
   return bubbleWindow;
 }
 
-// 创建喝水提醒窗口 - 使用小旅星窗口
+// 创建喝水提醒窗口（持久弹窗，带交互按钮）
 function createWaterReminderWindow() {
-  const waterMessage = '💧 该喝水啦！记得保持水分补充哦～';
-  createPetStatusWindow(waterMessage);
+  try {
+    if (waterReminderWindow && !waterReminderWindow.isDestroyed()) {
+      waterReminderWindow.show();
+      waterReminderWindow.focus();
+      return waterReminderWindow;
+    }
+
+    waterReminderWindow = new BrowserWindow({
+      width: 640,
+      height: 520,
+      frame: false,
+      alwaysOnTop: true,
+      transparent: true,
+      resizable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true
+      },
+      movable: true,
+      focusable: true
+    });
+
+    waterReminderWindow.loadFile('waterReminder.html');
+
+    // 将窗口置于屏幕中央
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    waterReminderWindow.setPosition(
+      Math.round((width - 640) / 2),
+      Math.round((height - 520) / 2)
+    );
+
+    // 不因失焦自动关闭，直到用户点击按钮
+    waterReminderWindow.on('closed', () => {
+      waterReminderWindow = null;
+    });
+
+    return waterReminderWindow;
+  } catch (error) {
+    console.error('Error creating water reminder window:', error);
+    // 兜底：使用小旅星窗口展示消息
+    const waterMessage = '💧 该喝水啦！记得保持水分补充哦～';
+    createPetStatusWindow(waterMessage);
+  }
 }
 
 // 截取屏幕截图
@@ -1610,8 +1655,9 @@ app.whenReady().then(() => {
     createPetWindow(); // 创建宠物窗口
     registerScreenshotListener();
 
-    // 设置ActivityMonitor的createPetStatusWindow函数
+    // 注入弹窗创建函数给ActivityMonitor
     setCreatePetStatusWindowFunction(createPetStatusWindow);
+    setCreateWaterReminderWindowFunction(createWaterReminderWindow);
     activityMonitor = new ActivityMonitor();
   }, 1000);
 }).catch(err => {
