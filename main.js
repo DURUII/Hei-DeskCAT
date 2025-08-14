@@ -2,6 +2,7 @@
 require('dotenv').config();
 
 const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
+const Screenshots = require('electron-screenshots');
 const path = require('path');
 const { ActivityMonitor, setCreatePetStatusWindowFunction, setCreateWaterReminderWindowFunction } = require('./activityMonitor');
 const { analyzeScreenshot, generateFunReminder } = require('./aiService');
@@ -27,6 +28,7 @@ let waterReminderWindow;
 let petWindow;
 let contextMenuWindow = null;
 let transparencyWindow = null; // 添加右键菜单窗口跟踪
+let screenshots = null; // 第三方区域截屏实例
 
 // 拖动相关变量
 let isDragging = false;
@@ -861,6 +863,64 @@ function createPetWindow() {
   return petWindow;
 }
 
+// 初始化第三方区域截图并接入 AI 处理
+function setupScreenshots() {
+  try {
+    screenshots = new Screenshots({ singleWindow: false });
+
+    screenshots.on('ok', async (e, buffer /* PNG Buffer */, bounds) => {
+      try {
+        const base64 = Buffer.from(buffer).toString('base64');
+        const aiResponse = await analyzeScreenshot(base64);
+        console.log('AI analysis result (region):', aiResponse);
+        handleAIResponse(aiResponse);
+      } catch (err) {
+        console.error('AI analyze error for region:', err);
+      }
+    });
+
+    screenshots.on('cancel', () => {
+      console.log('Region capture canceled');
+      // 恢复默认表情
+      resetPetState();
+    });
+
+    screenshots.on('error', (e, err) => {
+      console.error('screenshots error:', err);
+    });
+  } catch (e) {
+    console.error('Failed to setup electron-screenshots:', e);
+  }
+}
+
+// 统一处理AI响应到UI
+function handleAIResponse(aiResponse) {
+  try {
+    if (!aiResponse) return;
+    // 使用小旅星窗口显示AI回复
+    createPetStatusWindow(aiResponse.message);
+
+    // 如果AI判断需要触发旅行，则显示气泡提示
+    if (aiResponse.shouldTravel) {
+      setTimeout(() => {
+        showScreenshotBubble(aiResponse.message);
+      }, 1200);
+    }
+
+    // 切换宠物表情并设置状态复原
+    if (aiResponse.emotion && petWindow && !petWindow.isDestroyed()) {
+      try {
+        petWindow.webContents.send('change-emotion', aiResponse.emotion);
+        setPetState(aiResponse.emotion);
+      } catch (error) {
+        console.error('Failed to send emotion change:', error);
+      }
+    }
+  } catch (e) {
+    console.error('handleAIResponse error:', e);
+  }
+}
+
 // 创建宠物状态弹窗窗口
 function createPetStatusWindow(message) {
   console.log('Creating pet status window with message:', message);
@@ -1408,34 +1468,15 @@ function registerScreenshotListener() {
 
     // 更改截图快捷键为F2
     const ret = globalShortcut.register('F2', async () => {
-      console.log('Screenshot taken!');
-
-      // 捕获并分析截图
-      const aiResponse = await captureScreenshot();
-      console.log('AI analysis result:', aiResponse);
-
-      // 使用小旅星窗口显示AI回复
-      createPetStatusWindow(aiResponse.message);
-
-      // 如果AI判断需要触发旅行，则显示气泡提示
-      if (aiResponse.shouldTravel) {
-        // 显示AI生成的气泡提示
-        setTimeout(() => {
-          showScreenshotBubble(aiResponse.message);
-        }, 1200);
-      }
-
-      // 切换宠物表情并设置状态复原
-      if (aiResponse.emotion && petWindow && !petWindow.isDestroyed()) {
-        try {
-          petWindow.webContents.send('change-emotion', aiResponse.emotion);
-          console.log('Sent emotion change to pet:', aiResponse.emotion);
-
-          // 设置状态并启动复原计时器
-          setPetState(aiResponse.emotion);
-        } catch (error) {
-          console.error('Failed to send emotion change:', error);
-        }
+      console.log('Region screenshot flow start');
+      try { petWindow && petWindow.webContents.send('change-emotion', '好复杂'); } catch (e) {}
+      createPetStatusWindow('思考中…');
+      if (screenshots) {
+        try { screenshots.startCapture(); } catch (e) { console.error('startCapture failed', e); }
+      } else {
+        // 兜底：全屏截图
+        const aiResponse = await captureScreenshot();
+        handleAIResponse(aiResponse);
       }
     });
 
@@ -1507,6 +1548,8 @@ function registerScreenshotListener() {
     console.log('Reset pet state listener registration error:', error);
   }
 }
+
+// 移除自研区域选择器的 IPC 交互（改用 electron-screenshots）
 
 // 显示截图响应气泡（放置在右上角）
 function showScreenshotBubble(message) {
@@ -1705,6 +1748,7 @@ app.whenReady().then(() => {
   setTimeout(() => {
     createMainWindow();
     createPetWindow(); // 创建宠物窗口
+    setupScreenshots(); // 初始化第三方区域截屏
     registerScreenshotListener();
 
     // 注入弹窗创建函数给ActivityMonitor
