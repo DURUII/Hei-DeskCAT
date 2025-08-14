@@ -86,6 +86,70 @@
             transform: scale(0.95);
         }
 
+        .speed-control {
+            position: absolute;
+            bottom: 120px;
+            left: 10px;
+            z-index: 15;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            width: 200px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            -webkit-app-region: no-drag;
+        }
+
+        .speed-control .speed-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .speed-control .speed-value {
+            color: #4a6cf7;
+            font-weight: bold;
+        }
+
+        .speed-slider {
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .speed-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4a6cf7;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .speed-slider::-webkit-slider-thumb:hover {
+            background: #3a5ce7;
+            transform: scale(1.1);
+        }
+
+        .speed-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4a6cf7;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
         .location-info {
             position: absolute;
             bottom: 50px;
@@ -391,6 +455,15 @@
             <div class="zoom-control" id="reset-view" title="重置视野">⌂</div>
         </div>
 
+        <!-- 速度控制 -->
+        <div class="speed-control" id="speed-control">
+            <div class="speed-label">
+                <span>旅行速度</span>
+                <span class="speed-value" id="speed-value">60 km/h</span>
+            </div>
+            <input type="range" class="speed-slider" id="speed-slider" min="10" max="200" value="60" step="10">
+        </div>
+
         <!-- 位置信息 -->
         <div class="location-info" id="location-info">
             <div><span class="current">出发地</span>: <span id="current-location">加载中...</span></div>
@@ -452,6 +525,11 @@
         const weatherDesc = document.getElementById('weather-desc');
         const weatherTemp = document.getElementById('weather-temp');
 
+        // 速度控制元素
+        const speedControl = document.getElementById('speed-control');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+
         // 旅行状态显示元素
         const travelStatus = document.getElementById('travel-status');
 
@@ -470,6 +548,11 @@
         let travelSpeed = 200; // 移动间隔（毫秒）- 调整为更慢的速度便于观察
         let totalDistance = 0;
         let traveledDistance = 0;
+
+        // 真实旅行速度相关变量
+        let currentSpeedKmh = 60; // 当前速度（公里/小时）
+        let lastTravelTime = 0; // 上次旅行时间
+        let travelStartTime = 0; // 旅行开始时间
 
         // 天气相关变量
         let currentWeatherData = null;
@@ -511,6 +594,35 @@
                 mapInstance.setBounds(bounds, true, [20, 20, 20, 20]);
             }
         });
+
+        // 初始化时隐藏速度控制
+        speedControl.style.display = 'none';
+
+        // 速度控制事件监听
+        speedSlider.addEventListener('input', (e) => {
+            currentSpeedKmh = parseInt(e.target.value);
+            speedValue.textContent = `${currentSpeedKmh} km/h`;
+
+            // 如果正在旅行，重新计算动画速度
+            if (isTraveling && routePath.length > 0) {
+                updateTravelSpeed();
+            }
+        });
+
+        // 更新旅行速度的函数
+        function updateTravelSpeed() {
+            if (routePath.length === 0) return;
+
+            // 根据当前速度计算动画间隔
+            // 假设每个路径点之间的距离约为总距离的1/100
+            const avgSegmentDistance = totalDistance / routePath.length; // 公里
+            const timePerSegment = (avgSegmentDistance / currentSpeedKmh) * 3600 * 1000; // 毫秒
+
+            // 限制最小和最大间隔
+            travelSpeed = Math.max(50, Math.min(2000, timePerSegment));
+
+            console.log(`速度更新: ${currentSpeedKmh} km/h, 动画间隔: ${travelSpeed}ms`);
+        }
 
         // 调试按钮事件监听
 
@@ -767,6 +879,20 @@
                                     // 保存路线到全局变量
                                     window.routePath = routePath;
                                     window.currentPathIndex = 0;
+
+                                    // 设置总距离（从路线数据中获取）
+                                    if (paths.distance) {
+                                        totalDistance = paths.distance / 1000; // 转换为公里
+                                        console.log(`总距离设置为: ${totalDistance} 公里`);
+                                    } else {
+                                        // 如果没有距离信息，计算起点到终点的直线距离作为估算
+                                        const startPoint = routePath[0];
+                                        const endPoint = routePath[routePath.length - 1];
+                                        const dx = startPoint.lng - endPoint.lng;
+                                        const dy = startPoint.lat - endPoint.lat;
+                                        totalDistance = Math.sqrt(dx * dx + dy * dy) * 111; // 粗略转换为公里
+                                        console.log(`估算总距离: ${totalDistance} 公里`);
+                                    }
 
                                     console.log('Route path saved to window.routePath:', {
                                         length: routePath.length,
@@ -1217,8 +1343,16 @@
             }
 
             isTraveling = true;
+            travelStartTime = Date.now();
+            lastTravelTime = travelStartTime;
             debugInfo.textContent = '开始旅行动画...';
             console.log('Starting travel animation with', window.routePath.length, 'points');
+
+            // 显示速度控制
+            speedControl.style.display = 'block';
+
+            // 初始化速度设置
+            updateTravelSpeed();
 
             // 创建旅行者标记（如果还没有）
             if (!travelerMarker) {
@@ -1227,7 +1361,20 @@
 
             // 开始动画
             console.log('Starting animation interval with speed:', travelSpeed, 'ms');
-            travelAnimation = setInterval(() => {
+
+            function animateTravel() {
+                // 计算基于真实速度的时间间隔
+                const now = Date.now();
+                const elapsed = now - lastTravelTime;
+
+                // 如果距离上次动画的时间还不够，继续等待
+                if (elapsed < travelSpeed) {
+                    travelAnimation = setTimeout(animateTravel, travelSpeed - elapsed);
+                    return;
+                }
+
+                lastTravelTime = now;
+
                 console.log('Animation tick - currentPathIndex:', window.currentPathIndex, 'total:', window.routePath.length);
 
                 if (window.currentPathIndex < window.routePath.length - 1) {
@@ -1287,6 +1434,9 @@
                     }
 
                     console.log(`Travel progress: ${progress.toFixed(1)}%`);
+
+                    // 继续下一帧动画
+                    travelAnimation = setTimeout(animateTravel, travelSpeed);
                 } else {
                     // 到达目的地
                     console.log('Reached destination, stopping animation');
@@ -1294,16 +1444,22 @@
                     statusText.textContent = '已抵达目的地！';
                     debugInfo.textContent = '旅行完成';
                 }
-            }, travelSpeed);
+            }
+
+            // 开始第一帧动画
+            animateTravel();
         }
 
         function stopTravelAnimation() {
             if (travelAnimation) {
-                clearInterval(travelAnimation);
+                clearTimeout(travelAnimation);
                 travelAnimation = null;
             }
             isTraveling = false;
             debugInfo.textContent = '旅行已停止';
+
+            // 隐藏速度控制
+            speedControl.style.display = 'none';
         }
 
         function createTravelerMarker() {
@@ -1365,9 +1521,26 @@
         }
 
         function updateStatusText(progress) {
-            const remainingProgress = 100 - progress;
-            const remainingHours = Math.max(0, Math.floor(remainingProgress / 100 * 11));
-            statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
+            if (totalDistance > 0 && currentSpeedKmh > 0) {
+                const remainingProgress = 100 - progress;
+                const remainingDistance = (remainingProgress / 100) * totalDistance; // 公里
+                const remainingHours = Math.max(0, (remainingDistance / currentSpeedKmh));
+                const remainingMinutes = Math.max(0, Math.floor((remainingHours % 1) * 60));
+                const remainingHoursInt = Math.floor(remainingHours);
+
+                let timeText = '';
+                if (remainingHoursInt > 0) {
+                    timeText = `预计${remainingHoursInt}小时${remainingMinutes > 0 ? remainingMinutes + '分钟' : ''}后抵达`;
+                } else {
+                    timeText = `预计${remainingMinutes}分钟后抵达`;
+                }
+
+                statusText.textContent = `${timeText}，当前速度${currentSpeedKmh}km/h`;
+            } else {
+                const remainingProgress = 100 - progress;
+                const remainingHours = Math.max(0, Math.floor(remainingProgress / 100 * 11));
+                statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
+            }
         }
 
         function createSimplifiedPath(startCoords, endCoords, pointCount = 50) {
