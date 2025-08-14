@@ -76,6 +76,56 @@ let petStatusWindow = null;
 let activityMonitor;
 let amapService;
 
+// 使用Promise缓存获取天气信息，防止重复请求
+async function getWeatherWithCache(lng, lat) {
+  // 将坐标省略到三位小数，防止由于坐标变化导致重复请求
+  const roundedLng = Math.round(lng * 1000) / 1000;
+  const roundedLat = Math.round(lat * 1000) / 1000;
+  const cacheKey = `${roundedLng}_${roundedLat}`;
+
+  // 检查是否有进行中的请求
+  if (weatherRequestCache.has(cacheKey)) {
+    console.log('Weather request already in progress, waiting for result...');
+    return await weatherRequestCache.get(cacheKey);
+  }
+
+  // 创建新的请求Promise
+  const weatherPromise = weatherService.getWeatherByCoordinates(lng, lat);
+  weatherRequestCache.set(cacheKey, weatherPromise);
+
+  try {
+    const result = await weatherPromise;
+    return result;
+  } finally {
+    // 请求完成后清理缓存
+    weatherRequestCache.delete(cacheKey);
+  }
+}
+
+// 使用Promise缓存生成旅行状态，防止重复请求
+async function generateTravelStatusWithCache(weatherInfo) {
+  const cacheKey = `${weatherInfo.city}_${weatherInfo.weather}_${weatherInfo.temperature}`;
+
+  // 检查是否有进行中的请求
+  if (travelStatusRequestCache.has(cacheKey)) {
+    console.log('Travel status generation already in progress, waiting for result...');
+    return await travelStatusRequestCache.get(cacheKey);
+  }
+
+  // 创建新的请求Promise
+  const { generateJourneyStatusWithLocation } = require('./aiService');
+  const statusPromise = generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
+  travelStatusRequestCache.set(cacheKey, statusPromise);
+
+  try {
+    const result = await statusPromise;
+    return result;
+  } finally {
+    // 请求完成后清理缓存
+    travelStatusRequestCache.delete(cacheKey);
+  }
+}
+
 // 创建主窗口
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -344,56 +394,6 @@ function createPetWindow() {
     console.log('当前桌宠状态:', stateInfo);
     event.reply('pet-state-info', stateInfo);
   });
-
-  // 使用Promise缓存获取天气信息，防止重复请求
-  async function getWeatherWithCache(lng, lat) {
-    // 将坐标省略到三位小数，防止由于坐标变化导致重复请求
-    const roundedLng = Math.round(lng * 1000) / 1000;
-    const roundedLat = Math.round(lat * 1000) / 1000;
-    const cacheKey = `${roundedLng}_${roundedLat}`;
-
-    // 检查是否有进行中的请求
-    if (weatherRequestCache.has(cacheKey)) {
-      console.log('Weather request already in progress, waiting for result...');
-      return await weatherRequestCache.get(cacheKey);
-    }
-
-    // 创建新的请求Promise
-    const weatherPromise = weatherService.getWeatherByCoordinates(lng, lat);
-    weatherRequestCache.set(cacheKey, weatherPromise);
-
-    try {
-      const result = await weatherPromise;
-      return result;
-    } finally {
-      // 请求完成后清理缓存
-      weatherRequestCache.delete(cacheKey);
-    }
-  }
-
-  // 使用Promise缓存生成旅行状态，防止重复请求
-  async function generateTravelStatusWithCache(weatherInfo) {
-    const cacheKey = `${weatherInfo.city}_${weatherInfo.weather}_${weatherInfo.temperature}`;
-
-    // 检查是否有进行中的请求
-    if (travelStatusRequestCache.has(cacheKey)) {
-      console.log('Travel status generation already in progress, waiting for result...');
-      return await travelStatusRequestCache.get(cacheKey);
-    }
-
-    // 创建新的请求Promise
-    const { generateJourneyStatusWithLocation } = require('./aiService');
-    const statusPromise = generateJourneyStatusWithLocation(weatherInfo.cityInfo, weatherInfo);
-    travelStatusRequestCache.set(cacheKey, statusPromise);
-
-    try {
-      const result = await statusPromise;
-      return result;
-    } finally {
-      // 请求完成后清理缓存
-      travelStatusRequestCache.delete(cacheKey);
-    }
-  }
 
   // 监听旅行位置更新事件
   ipcMain.on('travel-position-update', async (event, data) => {
@@ -1469,7 +1469,7 @@ function registerScreenshotListener() {
     // 更改截图快捷键为F2
     const ret = globalShortcut.register('F2', async () => {
       console.log('Region screenshot flow start');
-      try { petWindow && petWindow.webContents.send('change-emotion', '好复杂'); } catch (e) {}
+      try { petWindow && petWindow.webContents.send('change-emotion', '好复杂'); } catch (e) { }
       createPetStatusWindow('思考中…');
       if (screenshots) {
         try { screenshots.startCapture(); } catch (e) { console.error('startCapture failed', e); }

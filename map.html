@@ -681,11 +681,10 @@
                     ? new AMap.LngLat(originCoords[0], originCoords[1])
                     : originCoords;
 
-                // 创建地图实例
                 const map = new AMap.Map('amap-container', {
                     zoom: 12, // 更高的缩放级别，显示更详细的局部区域
                     center: originLngLat,
-                    mapStyle: 'amap://styles/normal',
+                    mapStyle: 'amap://styles/fresh',
                     showIndoorMap: false, // 不显示室内地图
                     dragEnable: true, // 允许拖拽
                     zoomEnable: true, // 允许缩放
