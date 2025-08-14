@@ -200,7 +200,8 @@
 
         .travel-status {
             position: absolute;
-            top: 110px;  /* 从90px调整为110px，避免遮挡天气显示 */
+            top: 110px;
+            /* 从90px调整为110px，避免遮挡天气显示 */
             left: 10px;
             z-index: 10;
             background: rgba(255, 255, 255, 0.9);
@@ -375,7 +376,7 @@
                 <div class="weather-temp" id="weather-temp">--°C</div>
             </div>
         </div>
-        
+
         <!-- 旅行状态显示 -->
         <div class="travel-status" id="travel-status">
             正在旅行中...
@@ -388,8 +389,6 @@
             <div class="zoom-control" id="zoom-in" title="放大">+</div>
             <div class="zoom-control" id="zoom-out" title="缩小">−</div>
             <div class="zoom-control" id="reset-view" title="重置视野">⌂</div>
-            <div class="zoom-control" id="debug-state" title="调试状态" style="background: #ff6b6b;">🐛</div>
-            <div class="zoom-control" id="test-marker" title="测试标记" style="background: #4CAF50;">🧪</div>
         </div>
 
         <!-- 位置信息 -->
@@ -445,8 +444,6 @@
         const zoomIn = document.getElementById('zoom-in');
         const zoomOut = document.getElementById('zoom-out');
         const resetView = document.getElementById('reset-view');
-        const debugState = document.getElementById('debug-state');
-        const testMarker = document.getElementById('test-marker');
 
         // 天气显示元素
         const weatherDisplay = document.getElementById('weather-display');
@@ -454,7 +451,7 @@
         const weatherCity = document.getElementById('weather-city');
         const weatherDesc = document.getElementById('weather-desc');
         const weatherTemp = document.getElementById('weather-temp');
-        
+
         // 旅行状态显示元素
         const travelStatus = document.getElementById('travel-status');
 
@@ -516,16 +513,7 @@
         });
 
         // 调试按钮事件监听
-        debugState.addEventListener('click', () => {
-            window.debugTravelState();
-            debugInfo.textContent = '调试信息已输出到控制台';
-        });
 
-        // 测试标记按钮事件监听
-        testMarker.addEventListener('click', () => {
-            window.testTravelerMarker();
-            debugInfo.textContent = '测试标记已创建，3秒后自动移除';
-        });
 
 
 
@@ -1207,78 +1195,7 @@
             ipcRenderer.send('request-travel-info');
         };
 
-        // 全局调试函数
-        window.debugTravelState = function () {
-            console.log('=== Travel State Debug ===');
-            console.log('window.routePath:', window.routePath);
-            console.log('window.currentPathIndex:', window.currentPathIndex);
-            console.log('mapInstance:', !!mapInstance);
-            console.log('travelerMarker:', !!travelerMarker);
-            console.log('isTraveling:', isTraveling);
-            console.log('travelAnimation:', !!travelAnimation);
-            console.log('travelSpeed:', travelSpeed);
 
-            if (window.routePath) {
-                console.log('Route path length:', window.routePath.length);
-                console.log('First point:', window.routePath[0]);
-                console.log('Last point:', window.routePath[window.routePath.length - 1]);
-            }
-
-            if (travelerMarker) {
-                console.log('Traveler marker position:', travelerMarker.getPosition());
-                console.log('Traveler marker visible:', travelerMarker.getVisible());
-            }
-
-            if (mapInstance) {
-                const markers = mapInstance.getAllOverlays('marker');
-                console.log('Total markers on map:', markers.length);
-                console.log('All markers:', markers);
-            }
-
-            console.log('========================');
-        };
-
-        // 测试旅行者标记创建
-        window.testTravelerMarker = function () {
-            console.log('=== Testing Traveler Marker ===');
-
-            if (!mapInstance) {
-                console.log('Map instance not available');
-                return;
-            }
-
-            if (!window.routePath || window.routePath.length === 0) {
-                console.log('Route path not available');
-                return;
-            }
-
-            // 创建测试标记
-            const testMarker = new AMap.Marker({
-                position: window.routePath[0],
-                title: '测试标记',
-                icon: new AMap.Icon({
-                    size: new AMap.Size(32, 32),
-                    image: 'data:image/svg+xml;base64,' + btoa(`
-                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="16" cy="16" r="15" fill="red" stroke="white" stroke-width="2"/>
-                            <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">TEST</text>
-                        </svg>
-                    `)
-                }),
-                offset: new AMap.Pixel(-16, -16),
-                zIndex: 200
-            });
-
-            mapInstance.add(testMarker);
-            console.log('Test marker created and added to map');
-            console.log('Test marker position:', testMarker.getPosition());
-
-            // 3秒后移除测试标记
-            setTimeout(() => {
-                mapInstance.remove(testMarker);
-                console.log('Test marker removed');
-            }, 3000);
-        };
 
         // 旅行动画相关函数
         function startTravelAnimation() {
