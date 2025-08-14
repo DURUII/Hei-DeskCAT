@@ -901,7 +901,7 @@ function handleAIResponse(aiResponse) {
     createPetStatusWindow(aiResponse.message);
 
     // 如果AI判断需要触发旅行，则显示气泡提示
-    if (aiResponse.shouldTravel) {
+    if (aiResponse.actions?.travel?.shouldTrigger) {
       setTimeout(() => {
         showScreenshotBubble(aiResponse.message);
       }, 1200);
@@ -1456,7 +1456,25 @@ async function captureScreenshot() {
   return {
     message: "替你去看北京天安门？",
     shouldTravel: true,
-    confidence: 0.5
+    confidence: 0.5,
+    emotion: "好棒",
+    actions: {
+      travel: {
+        shouldTrigger: true,
+        destination: "北京天安门",
+        confidence: 0.5
+      },
+      todo: {
+        shouldTrigger: false,
+        content: "",
+        confidence: 0.0
+      },
+      search: {
+        shouldTrigger: false,
+        content: "",
+        confidence: 0.0
+      }
+    }
   };
 }
 

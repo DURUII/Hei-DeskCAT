@@ -15,13 +15,20 @@ function extractFallbackResponse(response) {
     // 尝试从文本中提取信息
     const lowerResponse = response.toLowerCase();
 
-    // 检查是否包含旅行相关关键词
+    // 检查是否包含各种关键词
     const travelKeywords = ['旅行', '旅游', '景点', '风景', '地标', '建筑', '城市', '国家', '地区'];
+    const todoKeywords = ['任务', '待办', '会议', '截止', '计划', '工作', '项目', '清单'];
+    const searchKeywords = ['文档', '文章', '代码', '学习', '资料', '教程', '笔记', '知识'];
+
     const shouldTravel = travelKeywords.some(keyword => lowerResponse.includes(keyword));
+    const shouldTodo = todoKeywords.some(keyword => lowerResponse.includes(keyword));
+    const shouldSearch = searchKeywords.some(keyword => lowerResponse.includes(keyword));
 
     // 提取消息内容（移除可能的标签）
     let message = response
         .replace(/#travel/gi, '')
+        .replace(/#todo/gi, '')
+        .replace(/#search/gi, '')
         .replace(/#other/gi, '')
         .replace(/shouldTravel:\s*(true|false)/gi, '')
         .replace(/confidence:\s*\d+\.?\d*/gi, '')
@@ -29,14 +36,42 @@ function extractFallbackResponse(response) {
 
     // 如果消息为空，使用默认消息
     if (!message) {
-        message = shouldTravel ? "这个风景好美，替你去看看？" : "这看起来很有趣！";
+        if (shouldTravel) {
+            message = "这个风景好美，替你去看看？";
+        } else if (shouldTodo) {
+            message = "已加入待办！✅";
+        } else if (shouldSearch) {
+            message = "内容已保存！📚";
+        } else {
+            message = "这看起来很有趣！";
+        }
     }
+
+    // 构建actions对象
+    const actions = {
+        travel: {
+            shouldTrigger: shouldTravel,
+            destination: shouldTravel ? "北京天安门" : "",
+            confidence: shouldTravel ? 0.6 : 0.0
+        },
+        todo: {
+            shouldTrigger: shouldTodo,
+            content: shouldTodo ? "待办事项" : "",
+            confidence: shouldTodo ? 0.6 : 0.0
+        },
+        search: {
+            shouldTrigger: shouldSearch,
+            content: shouldSearch ? "检索内容" : "",
+            confidence: shouldSearch ? 0.6 : 0.0
+        }
+    };
 
     return {
         message: message,
         shouldTravel: shouldTravel,
         confidence: shouldTravel ? 0.6 : 0.5,
-        emotion: shouldTravel ? '好棒' : '嘿嘿被夸了'
+        emotion: shouldTravel ? '好棒' : (shouldTodo ? '思考并怀疑' : (shouldSearch ? '猫头偷看' : '嘿嘿被夸了')),
+        actions: actions
     };
 }
 
@@ -65,7 +100,24 @@ async function analyzeScreenshot(base64Image) {
                     message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
                     shouldTravel: true,
                     confidence: 0.7,
-                    emotion: "好棒"
+                    emotion: "好棒",
+                    actions: {
+                        travel: {
+                            shouldTrigger: true,
+                            destination: "北京天安门",
+                            confidence: 0.7
+                        },
+                        todo: {
+                            shouldTrigger: false,
+                            content: "",
+                            confidence: 0.0
+                        },
+                        search: {
+                            shouldTrigger: false,
+                            content: "",
+                            confidence: 0.0
+                        }
+                    }
                 };
             } else {
                 const nonTravelResponses = [
@@ -77,7 +129,24 @@ async function analyzeScreenshot(base64Image) {
                     message: nonTravelResponses[Math.floor(Math.random() * nonTravelResponses.length)],
                     shouldTravel: false,
                     confidence: 0.6,
-                    emotion: "嘿嘿被夸了"
+                    emotion: "嘿嘿被夸了",
+                    actions: {
+                        travel: {
+                            shouldTrigger: false,
+                            destination: "",
+                            confidence: 0.0
+                        },
+                        todo: {
+                            shouldTrigger: false,
+                            content: "",
+                            confidence: 0.0
+                        },
+                        search: {
+                            shouldTrigger: false,
+                            content: "",
+                            confidence: 0.0
+                        }
+                    }
                 };
             }
         }
@@ -97,23 +166,41 @@ async function analyzeScreenshot(base64Image) {
                     content: `你是罗小黑，是一个幼年小猫妖，对世界充满好奇，喜欢旅行，嫉恶如仇，早安喵，午安喵，晚安喵喵喵。人类会发送截图给你，你需要分析截图内容并给出回应。
 
                     分析规则：
-                    1. 如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
-                    2. 如果建议旅行，回应内容中包含且仅包含旅行目的地，不要包含其他内容，旅行目的地应包含城市和景点名
-                    3. 如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等
-                    4. 回应应该简短、有趣且富有想象力，不超过20个字
+                    1. 旅行触发：如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
+                    2. 待办记录：如果截图包含任务清单、会议安排、截止日期、工作计划等需要记录的事项，建议记录待办
+                    3. 内容检索：如果截图包含文档、文章、代码、学习资料等需要保存或检索的内容，建议内容检索
+                    4. 日常互动：如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等。注意：日常互动不触发任何额外事件（旅行、待办、检索），仅显示AI生成的互动信息
+                    5. 回应应该简短、有趣且富有想象力，不超过20个字
 
                     请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等关键字：
                     {
                     "message": "你的回应内容",
-                    "shouldTravel": true/false,
-                    "confidence": 0.8,
+                    "actions": {
+                        "travel": {
+                            "shouldTrigger": true/false,
+                            "destination": "旅行目的地（城市+景点名）",
+                            "confidence": 0.8
+                        },
+                        "todo": {
+                            "shouldTrigger": true/false,
+                            "content": "待办事项内容",
+                            "confidence": 0.8
+                        },
+                        "search": {
+                            "shouldTrigger": true/false,
+                            "content": "检索内容描述",
+                            "confidence": 0.8
+                        }
+                    },
                     "emotion": "表情标签"
                     }
 
                     其中：
                     - message: 回应内容（简体中文）
-                    - shouldTravel: 是否建议旅行（true/false）
-                    - confidence: 分析置信度（0.0-1.0）
+                    - actions: 各种动作的触发信息
+                      - travel: 旅行相关（shouldTrigger是否触发，destination目的地，confidence置信度）
+                      - todo: 待办相关（shouldTrigger是否触发，content待办内容，confidence置信度）
+                      - search: 检索相关（shouldTrigger是否触发，content检索内容，confidence置信度）
                     - emotion: 表情标签，根据截图内容选择最合适的表情，可选值：好棒（开心夸奖）、嘿嘿被夸了（害羞开心）、给你花花（友好送花）、有瓜让我听听（好奇八卦）、猫头偷看（偷偷观察）、思考并怀疑（思考状态）、好复杂（困惑）、馋得流口水（想吃东西）、生气替你出头（愤怒保护）、哼不理你了（傲娇）、玩手机（专注玩手机）、困死了（困倦）`
                 },
                 {
@@ -148,15 +235,15 @@ async function analyzeScreenshot(base64Image) {
 
             // 验证响应格式
             if (typeof parsedResponse.message === 'string' &&
-                typeof parsedResponse.shouldTravel === 'boolean' &&
-                typeof parsedResponse.confidence === 'number' &&
+                parsedResponse.actions &&
                 typeof parsedResponse.emotion === 'string') {
 
                 const result = {
                     message: parsedResponse.message,
-                    shouldTravel: parsedResponse.shouldTravel,
-                    confidence: parsedResponse.confidence,
-                    emotion: parsedResponse.emotion
+                    shouldTravel: parsedResponse.actions.travel?.shouldTrigger || false,
+                    confidence: parsedResponse.actions.travel?.confidence || 0.5,
+                    emotion: parsedResponse.emotion,
+                    actions: parsedResponse.actions
                 };
                 console.log('Valid JSON response:', result);
                 return result;
@@ -187,7 +274,24 @@ async function analyzeScreenshot(base64Image) {
                 message: defaultResponses[Math.floor(Math.random() * defaultResponses.length)],
                 shouldTravel: true,
                 confidence: 0.5,
-                emotion: "好棒"
+                emotion: "好棒",
+                actions: {
+                    travel: {
+                        shouldTrigger: true,
+                        destination: "北京天安门",
+                        confidence: 0.5
+                    },
+                    todo: {
+                        shouldTrigger: false,
+                        content: "",
+                        confidence: 0.0
+                    },
+                    search: {
+                        shouldTrigger: false,
+                        content: "",
+                        confidence: 0.0
+                    }
+                }
             };
         } else {
             const nonTravelResponses = [
@@ -199,7 +303,24 @@ async function analyzeScreenshot(base64Image) {
                 message: nonTravelResponses[Math.floor(Math.random() * nonTravelResponses.length)],
                 shouldTravel: false,
                 confidence: 0.4,
-                emotion: "嘿嘿被夸了"
+                emotion: "嘿嘿被夸了",
+                actions: {
+                    travel: {
+                        shouldTrigger: false,
+                        destination: "",
+                        confidence: 0.0
+                    },
+                    todo: {
+                        shouldTrigger: false,
+                        content: "",
+                        confidence: 0.0
+                    },
+                    search: {
+                        shouldTrigger: false,
+                        content: "",
+                        confidence: 0.0
+                    }
+                }
             };
         }
     }
