@@ -1,7 +1,7 @@
 // 加载环境变量
 require('dotenv').config();
 
-const { app, BrowserWindow, globalShortcut, desktopCapturer, Notification, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, globalShortcut, Notification, ipcMain, Menu } = require('electron');
 const Screenshots = require('electron-screenshots');
 const path = require('path');
 const { ActivityMonitor, setCreatePetStatusWindowFunction, setCreateWaterReminderWindowFunction } = require('./activityMonitor');
@@ -27,6 +27,7 @@ let bubbleWindow;
 let waterReminderWindow;
 let petWindow;
 let todoWindow = null; // 待办窗口
+let shortcutSettingsWindow = null; // 快捷键设置窗口
 let contextMenuWindow = null;
 let transparencyWindow = null; // 添加右键菜单窗口跟踪
 let screenshots = null; // 第三方区域截屏实例
@@ -544,31 +545,31 @@ function createPetWindow() {
     if (!petWindow || petWindow.isDestroyed()) {
       return;
     }
-  
+   
     try {
       const [x, y] = petWindow.getPosition();
       const [width, height] = petWindow.getSize();
-  
+   
       // 获取屏幕尺寸
       const { screen } = require('electron');
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-  
+   
       // 边缘吸附阈值（像素）
       const snapThreshold = 50;
-  
+   
       let newX = x;
       let newY = y;
       let snapped = false;
       let snapType = '';
       let shouldFlip = false;
-  
+   
       // 只进行屏幕边缘吸附，不吸附到其他窗口
       // 移除窗口吸附相关代码
-  
+   
       // 检测屏幕边缘吸附
       let screenSnapped = false;
-  
+   
       // 检测左边缘吸附
       if (x <= snapThreshold) {
         newX = 0;
@@ -581,7 +582,7 @@ function createPetWindow() {
         screenSnapped = true;
         snapType = '右边缘';
       }
-  
+   
       // 检测上边缘吸附
       if (y <= snapThreshold) {
         newY = 0;
@@ -595,10 +596,10 @@ function createPetWindow() {
         screenSnapped = true;
         snapType = '下边缘';
       }
-  
+   
       // 特殊处理：屏幕角落吸附
       const cornerThreshold = 30;
-  
+   
       // 左上角
       if (x <= cornerThreshold && y <= cornerThreshold) {
         newX = 0;
@@ -629,9 +630,9 @@ function createPetWindow() {
         screenSnapped = true;
         snapType = '右下角';
       }
-  
+   
       
-  
+   
       // 只进行屏幕边缘吸附
       if (screenSnapped) {
         snapped = true;
@@ -643,7 +644,7 @@ function createPetWindow() {
           position: [newX, newY],
           attachedWindow: null
         };
-  
+   
         // 清除吸附窗口记录
         if (petWindow.attachedToWindow) {
           delete petWindow.attachedToWindow;
@@ -662,11 +663,11 @@ function createPetWindow() {
           delete petWindow.attachedToWindow;
         }
       }
-  
+   
       // 如果检测到边缘吸附，移动窗口
       if (snapped) {
         petWindow.setPosition(newX, newY);
-  
+   
         console.log('边缘吸附完成:', {
           from: [x, y],
           to: [newX, newY],
@@ -674,13 +675,13 @@ function createPetWindow() {
           shouldFlip: shouldFlip,
           isSnapped: isSnapped
         });
-  
+   
         // 只通知渲染进程位置和翻转信息，不包含吸附类型消息
         petWindow.webContents.send('snap-completed', newX, newY, '', shouldFlip);
       } else {
         console.log('未检测到吸附，清除吸附状态');
       }
-  
+   
     } catch (error) {
       console.error('边缘吸附检查失败:', error);
     }
@@ -857,6 +858,46 @@ function createPetWindow() {
     }
   });
 
+  // 监听打开快捷键设置窗口请求
+  ipcMain.on('open-shortcut-settings', (event) => {
+    console.log('Opening shortcut settings window from context menu');
+    try {
+      createShortcutSettingsWindow();
+    } catch (error) {
+      console.error('Error opening shortcut settings window:', error);
+    }
+  });
+
+  // 监听快捷键更新请求
+  ipcMain.on('update-shortcuts', (event, shortcuts) => {
+    console.log('Updating shortcuts:', shortcuts);
+    try {
+      updateGlobalShortcuts(shortcuts);
+    } catch (error) {
+      console.error('Error updating shortcuts:', error);
+    }
+  });
+
+  // 监听禁用快捷键请求
+  ipcMain.on('disable-shortcuts', () => {
+    console.log('Disabling global shortcuts');
+    try {
+      globalShortcut.unregisterAll();
+    } catch (error) {
+      console.error('Error disabling shortcuts:', error);
+    }
+  });
+
+  // 监听启用快捷键请求
+  ipcMain.on('enable-shortcuts', (event, shortcuts) => {
+    console.log('Enabling global shortcuts:', shortcuts);
+    try {
+      updateGlobalShortcuts(shortcuts);
+    } catch (error) {
+      console.error('Error enabling shortcuts:', error);
+    }
+  });
+
   // 监听关闭右键菜单事件
   ipcMain.on('close-context-menu', (event) => {
     console.log('Closing context menu from external request');
@@ -989,6 +1030,240 @@ function addTodoFromAI(content) {
     // 出错时显示提示信息
     const message = `📝 AI已识别到待办事项：${content}\n请手动打开待办窗口添加！`;
     createPetStatusWindow(message);
+  }
+}
+
+// 切换宠物窗口显示/隐藏
+function togglePetWindow() {
+  try {
+    if (petWindow && !petWindow.isDestroyed()) {
+      if (petWindow.isVisible()) {
+        petWindow.hide();
+        console.log('Pet window hidden');
+      } else {
+        petWindow.show();
+        petWindow.focus();
+        console.log('Pet window shown');
+      }
+    } else {
+      // 如果宠物窗口不存在，创建新的
+      createPetWindow();
+      console.log('Pet window created');
+    }
+  } catch (error) {
+    console.error('Error toggling pet window:', error);
+  }
+}
+
+// 加载并注册快捷键
+function loadAndRegisterShortcuts() {
+  try {
+    // 默认快捷键配置
+    const defaultShortcuts = {
+      'ai-screenshot': { key: 'F2', description: 'AI区域截图' },
+      'water-reminder': { key: 'F3', description: '喝水提醒' },
+      'fun-reminder': { key: 'F4', description: '趣味提醒' },
+      'toggle-pet': { key: 'Ctrl+H', description: '桌宠隐藏/显示' },
+      'open-map': { key: 'Ctrl+M', description: '打开地图' },
+      'open-todo': { key: 'Ctrl+T', description: '打开待办' },
+      'open-main': { key: 'Ctrl+O', description: '打开主页面' },
+      'show-travel-status': { key: 'Ctrl+G', description: '显示旅行状态' }
+    };
+
+    // 尝试从localStorage加载自定义设置
+    let shortcuts = defaultShortcuts;
+
+    // 注意：主进程无法直接访问localStorage，所以这里使用默认设置
+    // 实际的快捷键更新会在快捷键设置窗口中通过IPC进行
+
+    // 注册快捷键
+    Object.entries(shortcuts).forEach(([action, config]) => {
+      try {
+        const key = config.key.toLowerCase();
+        let accelerator = key;
+
+        // 处理组合键
+        if (key.includes('+')) {
+          accelerator = key;
+        } else if (key.startsWith('f') && key.length > 1) {
+          // F键处理
+          accelerator = key.toUpperCase();
+        } else {
+          accelerator = key.toUpperCase();
+        }
+
+        console.log(`Registering shortcut: ${action} -> ${accelerator}`);
+
+        const success = globalShortcut.register(accelerator, () => {
+          handleShortcutAction(action);
+        });
+
+        if (success) {
+          console.log(`Successfully registered shortcut: ${action} -> ${accelerator}`);
+        } else {
+          console.error(`Failed to register shortcut: ${action} -> ${accelerator}`);
+        }
+      } catch (error) {
+        console.error(`Error registering shortcut for ${action}:`, error);
+      }
+    });
+
+    console.log('Global shortcuts loaded and registered successfully');
+  } catch (error) {
+    console.error('Error loading and registering shortcuts:', error);
+  }
+}
+
+// 更新全局快捷键
+function updateGlobalShortcuts(shortcuts) {
+  try {
+    // 先注销所有现有的快捷键
+    globalShortcut.unregisterAll();
+
+    // 重新注册新的快捷键
+    Object.entries(shortcuts).forEach(([action, config]) => {
+      try {
+        const key = config.key.toLowerCase();
+        let accelerator = key;
+
+        // 处理组合键
+        if (key.includes('+')) {
+          accelerator = key;
+        } else if (key.startsWith('f') && key.length > 1) {
+          // F键处理
+          accelerator = key.toUpperCase();
+        } else {
+          accelerator = key.toUpperCase();
+        }
+
+        console.log(`Registering shortcut: ${action} -> ${accelerator}`);
+
+        const success = globalShortcut.register(accelerator, () => {
+          handleShortcutAction(action);
+        });
+
+        if (success) {
+          console.log(`Successfully registered shortcut: ${action} -> ${accelerator}`);
+        } else {
+          console.error(`Failed to register shortcut: ${action} -> ${accelerator}`);
+        }
+      } catch (error) {
+        console.error(`Error registering shortcut for ${action}:`, error);
+      }
+    });
+
+    console.log('Global shortcuts updated successfully');
+  } catch (error) {
+    console.error('Error updating global shortcuts:', error);
+  }
+}
+
+// 处理快捷键动作
+function handleShortcutAction(action) {
+  try {
+    console.log(`Shortcut action triggered: ${action}`);
+
+    switch (action) {
+      case 'ai-screenshot':
+        // 启动区域截图
+        if (screenshots) {
+          try {
+            petWindow && petWindow.webContents.send('change-emotion', '好复杂');
+          } catch (e) { }
+          createPetStatusWindow('思考中…');
+          screenshots.startCapture();
+        } else {
+          console.error('Screenshots not initialized');
+          createPetStatusWindow('截图功能未初始化');
+        }
+        break;
+      case 'water-reminder':
+        createWaterReminderWindow();
+        break;
+      case 'fun-reminder':
+        showFunReminder();
+        break;
+      case 'toggle-pet':
+        togglePetWindow();
+        break;
+      case 'open-map':
+        // 使用与右键菜单相同的逻辑
+        if (mapWindow && !mapWindow.isDestroyed()) {
+          mapWindow.show();
+          mapWindow.focus();
+        } else {
+          // 检查是否有旅行数据
+          if (globalTravelData && globalTravelData.origin && globalTravelData.destination) {
+            // 有旅行数据，创建地图窗口
+            createMapWindow(globalTravelData);
+          } else {
+            // 没有旅行数据，显示状态提醒
+            console.log('No travel data available, showing status reminder');
+            const reminderMessage = '还没有设置目的地，请按F2截图触发旅行！';
+            createPetStatusWindow(reminderMessage);
+          }
+        }
+        break;
+      case 'open-todo':
+        createTodoWindow();
+        break;
+      case 'open-main':
+        // 使用与右键菜单相同的逻辑
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createMainWindow();
+        }
+        break;
+      case 'show-travel-status':
+        // 使用与右键菜单相同的逻辑
+        try {
+          console.log('Show travel status requested via shortcut');
+
+          // 检查是否有进行中的旅行
+          if (!currentTravelStatus.isInProgress) {
+            createPetStatusWindow('还没有开始旅行呢！按F2截图开始新的旅程吧✈️');
+            return;
+          }
+
+          // 使用AI生成的基于位置和天气的旅行状态
+          if (currentTravelStatus.currentStatus) {
+            createPetStatusWindow(currentTravelStatus.currentStatus);
+          } else {
+            createPetStatusWindow('正在旅行中...');
+          }
+        } catch (error) {
+          console.error('Error showing travel status:', error);
+          createPetStatusWindow('无法获取旅行状态信息');
+        }
+        break;
+      default:
+        console.log(`Unknown shortcut action: ${action}`);
+    }
+  } catch (error) {
+    console.error(`Error handling shortcut action ${action}:`, error);
+  }
+}
+
+// 显示趣味提醒
+function showFunReminder() {
+  try {
+    const funMessages = [
+      '🌟 小旅星提醒：该休息一下啦！',
+      '🎵 听首歌放松一下吧～',
+      '☕ 来杯咖啡提提神！',
+      '🌱 站起来活动一下身体吧！',
+      '🎮 玩个小游戏放松一下～',
+      '📚 读一页书，增长知识！',
+      '🎨 画个小画，发挥创意！',
+      '🍎 吃个水果，补充维生素！'
+    ];
+
+    const randomMessage = funMessages[Math.floor(Math.random() * funMessages.length)];
+    createPetStatusWindow(randomMessage);
+  } catch (error) {
+    console.error('Error showing fun reminder:', error);
   }
 }
 
@@ -1546,6 +1821,57 @@ function createTodoWindow() {
   }
 }
 
+// 创建快捷键设置窗口
+function createShortcutSettingsWindow() {
+  try {
+    if (shortcutSettingsWindow && !shortcutSettingsWindow.isDestroyed()) {
+      shortcutSettingsWindow.show();
+      shortcutSettingsWindow.focus();
+      return shortcutSettingsWindow;
+    }
+
+    shortcutSettingsWindow = new BrowserWindow({
+      width: 600,
+      height: 700,
+      frame: false,
+      alwaysOnTop: false,
+      resizable: true,
+      skipTaskbar: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true
+      },
+      movable: true,
+      focusable: true,
+      show: false
+    });
+
+    shortcutSettingsWindow.loadFile('shortcutSettings.html');
+
+    // 将窗口置于屏幕中央
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    shortcutSettingsWindow.setPosition(
+      Math.round((width - 600) / 2),
+      Math.round((height - 700) / 2)
+    );
+
+    shortcutSettingsWindow.once('ready-to-show', () => {
+      shortcutSettingsWindow.show();
+    });
+
+    shortcutSettingsWindow.on('closed', () => {
+      shortcutSettingsWindow = null;
+    });
+
+    return shortcutSettingsWindow;
+  } catch (error) {
+    console.error('Error creating shortcut settings window:', error);
+  }
+}
+
 // 启动待办提醒系统
 function startTodoReminder() {
   if (todoReminderTimer) {
@@ -1586,131 +1912,13 @@ function checkAndShowTodoReminder() {
   }
 }
 
-// 截取屏幕截图
-async function captureScreenshot() {
-  try {
-    console.log('📸 Capturing screenshot...');
-    const sources = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: 800, height: 600 }
-    });
-
-    if (sources && sources.length > 0) {
-      // 获取第一张屏幕截图
-      const source = sources[0];
-      const thumbnail = source.thumbnail;
-
-      // 将截图转换为base64编码
-      const base64Data = thumbnail.toDataURL().replace(/^data:image\/(png|jpeg);base64,/, '');
-      console.log('📸 Screenshot captured, size:', base64Data.length, 'characters');
-
-      // 使用AI分析截图内容
-      console.log('🤖 Analyzing screenshot with AI...');
-      const aiResponse = await analyzeScreenshot(base64Data);
-      console.log('✅ AI analysis completed:', aiResponse);
-      return aiResponse;
-    } else {
-      console.log('❌ No screen sources found');
-    }
-  } catch (error) {
-    console.error('❌ Screenshot capture failed:', error);
-  }
-
-  // 如果出错，返回默认响应
-  console.log('🔄 Returning fallback response');
-  return {
-    message: "替你去看北京天安门？",
-    shouldTravel: true,
-    confidence: 0.5,
-    emotion: "好棒",
-    actions: {
-      travel: {
-        shouldTrigger: true,
-        destination: "北京天安门",
-        confidence: 0.5
-      },
-      todo: {
-        shouldTrigger: false,
-        content: "",
-        confidence: 0.0
-      },
-      search: {
-        shouldTrigger: false,
-        content: "",
-        confidence: 0.0
-      }
-    }
-  };
-}
+// 截图功能已改为使用第三方区域截图库
+// 不再需要全屏截图功能
 
 // 注册全局快捷键监听截图
 function registerScreenshotListener() {
-  try {
-    // 先注销可能已注册的快捷键
-    globalShortcut.unregister('F2');
-
-    // 更改截图快捷键为F2
-    const ret = globalShortcut.register('F2', async () => {
-      console.log('Region screenshot flow start');
-      try { petWindow && petWindow.webContents.send('change-emotion', '好复杂'); } catch (e) { }
-      createPetStatusWindow('思考中…');
-      if (screenshots) {
-        try { screenshots.startCapture(); } catch (e) { console.error('startCapture failed', e); }
-      } else {
-        // 兜底：全屏截图
-        const aiResponse = await captureScreenshot();
-        handleAIResponse(aiResponse);
-      }
-    });
-
-    if (!ret) {
-      console.log('Screenshot listener registration failed');
-    } else {
-      console.log('Screenshot listener registered successfully');
-    }
-  } catch (error) {
-    console.log('Screenshot listener registration error:', error);
-  }
-
-  try {
-    // 先注销可能已注册的快捷键
-    globalShortcut.unregister('F3');
-
-    // 注册测试用快捷键
-    const ret2 = globalShortcut.register('F3', async () => {
-      console.log('Manual water reminder triggered!');
-      createWaterReminderWindow();
-    });
-
-    if (!ret2) {
-      console.log('Water reminder listener registration failed');
-    } else {
-      console.log('Water reminder listener registered successfully');
-    }
-  } catch (error) {
-    console.log('Water reminder listener registration error:', error);
-  }
-
-  try {
-    // 先注销可能已注册的快捷键
-    globalShortcut.unregister('F4');
-
-    // 注册另一个测试用快捷键
-    const ret3 = globalShortcut.register('F4', async () => {
-      console.log('Manual fun reminder triggered!');
-      // 生成AI趣味提醒
-      const funMessage = await generateFunReminder();
-      createPetStatusWindow(funMessage);
-    });
-
-    if (!ret3) {
-      console.log('Fun reminder listener registration failed');
-    } else {
-      console.log('Fun reminder listener registered successfully');
-    }
-  } catch (error) {
-    console.log('Fun reminder listener registration error:', error);
-  }
+  // 加载自定义快捷键设置
+  loadAndRegisterShortcuts();
 
   try {
     // 先注销可能已注册的快捷键

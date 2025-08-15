@@ -110,6 +110,11 @@
             <span>待办事项</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="openShortcutSettings">
+            <span>⚡</span>
+            <span>快捷键设置</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item transparency-control" id="transparencyControl">
             <span>🎨</span>
             <span>透明度调节</span>
@@ -127,6 +132,7 @@
             const openMainWindow = document.getElementById('openMainWindow');
             const openMapWindow = document.getElementById('openMapWindow');
             const openTodoWindow = document.getElementById('openTodoWindow');
+            const openShortcutSettings = document.getElementById('openShortcutSettings');
             const exitApp = document.getElementById('exitApp');
             const contextMenu = document.getElementById('contextMenu');
             const transparencyControl = document.getElementById('transparencyControl');
@@ -197,6 +203,17 @@
                     window.close();
                 } catch (error) {
                     console.error('Error opening todo window:', error);
+                }
+            });
+
+            // 打开快捷键设置窗口
+            openShortcutSettings.addEventListener('click', () => {
+                console.log('Opening shortcut settings from context menu');
+                try {
+                    ipcRenderer.send('open-shortcut-settings');
+                    window.close();
+                } catch (error) {
+                    console.error('Error opening shortcut settings:', error);
                 }
             });
 

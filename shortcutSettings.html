@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>快捷键设置</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f8f9fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            border-radius: 10px;
+            border: 1px solid #eee;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+            user-select: none;
+        }
+
+        .shortcut-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            -webkit-app-region: drag;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .close-button {
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            -webkit-app-region: no-drag;
+            position: relative;
+            z-index: 1000;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .close-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .close-button:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            -webkit-app-region: no-drag;
+        }
+
+        .shortcut-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .shortcut-section h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .shortcut-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .shortcut-item:last-child {
+            border-bottom: none;
+        }
+
+        .shortcut-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .shortcut-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .shortcut-description {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .shortcut-key {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #333;
+            min-width: 80px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .shortcut-key:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .shortcut-key.recording {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+            animation: pulse 1s infinite;
+        }
+
+        .shortcut-key.conflict {
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+
+        .shortcut-key.success {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+
+
+        .reset-button {
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .reset-button:hover {
+            background: #5a6268;
+        }
+
+        .save-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .save-button:hover {
+            background: #218838;
+        }
+
+        .save-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .footer {
+            background: white;
+            border-top: 1px solid #eee;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            -webkit-app-region: no-drag;
+        }
+
+        .status-message {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status-message.success {
+            color: #28a745;
+        }
+
+        .status-message.error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="shortcut-container">
+        <div class="header">
+            <h1>⚡ 快捷键设置</h1>
+            <button class="close-button" id="closeBtn">×</button>
+        </div>
+
+        <div class="content">
+            <div class="shortcut-section">
+                <h3>🎯 功能快捷键</h3>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">AI区域截图</div>
+                        <div class="shortcut-description">使用F2键进行AI区域截图识别和分析</div>
+                    </div>
+                    <div class="shortcut-key" data-action="ai-screenshot" data-default="F2">F2</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">喝水提醒</div>
+                        <div class="shortcut-description">使用F3键显示喝水提醒窗口</div>
+                    </div>
+                    <div class="shortcut-key" data-action="water-reminder" data-default="F3">F3</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">趣味提醒</div>
+                        <div class="shortcut-description">使用F4键显示趣味提醒消息</div>
+                    </div>
+                    <div class="shortcut-key" data-action="fun-reminder" data-default="F4">F4</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">桌宠隐藏/显示</div>
+                        <div class="shortcut-description">使用Ctrl+H键隐藏或显示桌宠</div>
+                    </div>
+                    <div class="shortcut-key" data-action="toggle-pet" data-default="Ctrl+H">Ctrl+H</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">打开地图</div>
+                        <div class="shortcut-description">使用Ctrl+M键打开地图窗口</div>
+                    </div>
+                    <div class="shortcut-key" data-action="open-map" data-default="Ctrl+M">Ctrl+M</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">打开待办</div>
+                        <div class="shortcut-description">使用Ctrl+T键打开待办事项窗口</div>
+                    </div>
+                    <div class="shortcut-key" data-action="open-todo" data-default="Ctrl+T">Ctrl+T</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">打开主页面</div>
+                        <div class="shortcut-description">使用Ctrl+O键打开主页面窗口</div>
+                    </div>
+                    <div class="shortcut-key" data-action="open-main" data-default="Ctrl+O">Ctrl+O</div>
+                </div>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">显示旅行状态</div>
+                        <div class="shortcut-description">使用Ctrl+G键显示当前旅行状态</div>
+                    </div>
+                    <div class="shortcut-key" data-action="show-travel-status" data-default="Ctrl+G">Ctrl+G</div>
+                </div>
+            </div>
+
+
+
+            <div class="shortcut-section">
+                <h3>🔄 操作</h3>
+                <div class="shortcut-item">
+                    <div class="shortcut-info">
+                        <div class="shortcut-name">重置为默认</div>
+                        <div class="shortcut-description">将所有快捷键重置为默认值</div>
+                    </div>
+                    <button class="reset-button" id="resetDefaults">重置默认</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="status-message" id="statusMessage">准备就绪</div>
+            <button class="save-button" id="saveButton">保存设置</button>
+        </div>
+    </div>
+
+    <script>
+        // 快捷键配置
+        const shortcuts = {
+            'ai-screenshot': { key: 'F2', description: 'AI区域截图' },
+            'water-reminder': { key: 'F3', description: '喝水提醒' },
+            'fun-reminder': { key: 'F4', description: '趣味提醒' },
+            'toggle-pet': { key: 'Ctrl+H', description: '桌宠隐藏/显示' },
+            'open-map': { key: 'Ctrl+M', description: '打开地图' },
+            'open-todo': { key: 'Ctrl+T', description: '打开待办' },
+            'open-main': { key: 'Ctrl+O', description: '打开主页面' },
+            'show-travel-status': { key: 'Ctrl+G', description: '显示旅行状态' }
+        };
+
+        // 当前正在录制的快捷键
+        let recordingAction = null;
+        let originalShortcuts = {}; // 保存原始快捷键值
+        let shortcutsDisabled = false; // 快捷键是否已禁用
+
+        // DOM 元素
+        const closeBtn = document.getElementById('closeBtn');
+        const saveButton = document.getElementById('saveButton');
+        const resetDefaultsBtn = document.getElementById('resetDefaults');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // 初始化
+        function init() {
+            loadShortcuts();
+            setupEventListeners();
+            // 启动时通知主进程更新快捷键
+            setTimeout(() => {
+                if (typeof require !== 'undefined') {
+                    const { ipcRenderer } = require('electron');
+                    ipcRenderer.send('update-shortcuts', shortcuts);
+                }
+            }, 1000);
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 关闭按钮
+            closeBtn.addEventListener('click', () => {
+                console.log('Close button clicked');
+                window.close();
+            });
+
+            // 保存按钮
+            saveButton.addEventListener('click', saveShortcuts);
+
+            // 重置默认按钮
+            // resetDefaultsBtn.addEventListener('click', resetToDefaults);
+            resetDefaultsBtn.addEventListener('click', () => {
+                resetToDefaults();
+                saveShortcuts();
+            });
+
+            // 键盘事件监听
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+
+            // 快捷键点击事件
+            document.querySelectorAll('.shortcut-key').forEach(keyElement => {
+                keyElement.addEventListener('click', () => {
+                    const action = keyElement.dataset.action;
+                    startRecording(action);
+                });
+            });
+
+            // ESC键关闭
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (recordingAction) {
+                        // 还原为原始值
+                        const keyElement = document.querySelector(`[data-action="${recordingAction}"]`);
+                        shortcuts[recordingAction].key = originalShortcuts[recordingAction];
+                        keyElement.textContent = originalShortcuts[recordingAction];
+                        stopRecording();
+                        enableShortcuts();
+                    } else {
+                        window.close();
+                    }
+                }
+            });
+
+            // 窗口关闭时恢复快捷键
+            window.addEventListener('beforeunload', () => {
+                if (shortcutsDisabled) {
+                    enableShortcuts();
+                }
+            });
+        }
+
+        // 开始录制快捷键
+        function startRecording(action) {
+            if (recordingAction) {
+                stopRecording();
+            }
+
+            // 保存原始快捷键值
+            originalShortcuts[action] = shortcuts[action].key;
+
+            // 临时禁用所有快捷键
+            if (!shortcutsDisabled) {
+                disableShortcuts();
+            }
+
+            recordingAction = action;
+            const keyElement = document.querySelector(`[data-action="${action}"]`);
+            keyElement.classList.add('recording');
+            keyElement.textContent = '请按键...';
+
+            statusMessage.textContent = `正在录制 ${shortcuts[action].description} 的快捷键...`;
+            statusMessage.className = 'status-message';
+        }
+
+        // 停止录制
+        function stopRecording() {
+            if (!recordingAction) return;
+
+            const keyElement = document.querySelector(`[data-action="${recordingAction}"]`);
+            keyElement.classList.remove('recording');
+
+            recordingAction = null;
+            statusMessage.textContent = '准备就绪';
+        }
+
+        // 临时禁用快捷键
+        function disableShortcuts() {
+            if (typeof require !== 'undefined') {
+                const { ipcRenderer } = require('electron');
+                ipcRenderer.send('disable-shortcuts');
+                shortcutsDisabled = true;
+            }
+        }
+
+        // 恢复快捷键
+        function enableShortcuts() {
+            if (typeof require !== 'undefined') {
+                const { ipcRenderer } = require('electron');
+                ipcRenderer.send('enable-shortcuts', shortcuts);
+                shortcutsDisabled = false;
+            }
+        }
+
+        // 处理按键按下
+        function handleKeyDown(e) {
+            if (!recordingAction) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const key = e.key.toUpperCase();
+            const modifiers = [];
+
+            if (e.ctrlKey) modifiers.push('Ctrl');
+            if (e.shiftKey) modifiers.push('Shift');
+            if (e.altKey) modifiers.push('Alt');
+            if (e.metaKey) modifiers.push('Cmd');
+
+            let shortcutKey = key;
+            if (modifiers.length > 0) {
+                shortcutKey = modifiers.join('+') + '+' + key;
+            }
+
+            // 检查冲突
+            const conflict = checkShortcutConflict(recordingAction, shortcutKey);
+
+            // 更新快捷键
+            shortcuts[recordingAction].key = shortcutKey;
+            const keyElement = document.querySelector(`[data-action="${recordingAction}"]`);
+            keyElement.textContent = shortcutKey;
+            keyElement.classList.remove('recording');
+
+            if (conflict) {
+                keyElement.classList.add('conflict');
+                statusMessage.textContent = `检测到冲突：${conflict.description}`;
+                statusMessage.className = 'status-message error';
+            } else {
+                keyElement.classList.add('success');
+                setTimeout(() => keyElement.classList.remove('success'), 1000);
+                statusMessage.textContent = '快捷键已更新';
+                statusMessage.className = 'status-message success';
+            }
+
+            recordingAction = null;
+
+            // 恢复快捷键
+            enableShortcuts();
+        }
+
+        // 处理按键释放
+        function handleKeyUp(e) {
+            if (recordingAction) {
+                // 如果没有按下任何键就停止录制，还原为原始值
+                const keyElement = document.querySelector(`[data-action="${recordingAction}"]`);
+                if (keyElement.textContent === '请按键...') {
+                    shortcuts[recordingAction].key = originalShortcuts[recordingAction];
+                    keyElement.textContent = originalShortcuts[recordingAction];
+                }
+                stopRecording();
+                enableShortcuts();
+            }
+        }
+
+        // 检查快捷键冲突
+        function checkShortcutConflict(action, newKey) {
+            for (const [otherAction, config] of Object.entries(shortcuts)) {
+                if (otherAction !== action && config.key === newKey) {
+                    return {
+                        action: action,
+                        conflictingAction: otherAction,
+                        key: newKey,
+                        description: `与 ${config.description} 冲突`
+                    };
+                }
+            }
+            return null;
+        }
+
+        // 保存快捷键设置
+        function saveShortcuts() {
+            try {
+                localStorage.setItem('shortcuts', JSON.stringify(shortcuts));
+                statusMessage.textContent = '设置已保存';
+                statusMessage.className = 'status-message success';
+
+                // 通知主进程更新快捷键
+                if (typeof require !== 'undefined') {
+                    const { ipcRenderer } = require('electron');
+                    ipcRenderer.send('update-shortcuts', shortcuts);
+                }
+            } catch (error) {
+                console.error('Error saving shortcuts:', error);
+                statusMessage.textContent = '保存失败';
+                statusMessage.className = 'status-message error';
+            }
+        }
+
+        // 加载快捷键设置
+        function loadShortcuts() {
+            try {
+                const saved = localStorage.getItem('shortcuts');
+                if (saved) {
+                    const savedShortcuts = JSON.parse(saved);
+                    Object.assign(shortcuts, savedShortcuts);
+                }
+            } catch (error) {
+                console.error('Error loading shortcuts:', error);
+            }
+
+            // 更新UI
+            Object.entries(shortcuts).forEach(([action, config]) => {
+                const keyElement = document.querySelector(`[data-action="${action}"]`);
+                if (keyElement) {
+                    keyElement.textContent = config.key;
+                }
+            });
+        }
+
+        // 重置为默认设置
+        function resetToDefaults() {
+            shortcuts['ai-screenshot'].key = 'F2';
+            shortcuts['water-reminder'].key = 'F3';
+            shortcuts['fun-reminder'].key = 'F4';
+            shortcuts['toggle-pet'].key = 'Ctrl+H';
+            shortcuts['open-map'].key = 'Ctrl+M';
+            shortcuts['open-todo'].key = 'Ctrl+T';
+            shortcuts['open-main'].key = 'Ctrl+O';
+            shortcuts['show-travel-status'].key = 'Ctrl+G';
+
+            // 更新UI
+            Object.entries(shortcuts).forEach(([action, config]) => {
+                const keyElement = document.querySelector(`[data-action="${action}"]`);
+                if (keyElement) {
+                    keyElement.textContent = config.key;
+                    keyElement.classList.remove('conflict', 'success');
+                }
+            });
+
+            // 清除冲突状态
+            document.querySelectorAll('.shortcut-key.conflict').forEach(el => {
+                el.classList.remove('conflict');
+            });
+            statusMessage.textContent = '已重置为默认设置';
+            statusMessage.className = 'status-message success';
+        }
+
+        // 初始化
+        init();
+    </script>
+</body>
+
+</html>
