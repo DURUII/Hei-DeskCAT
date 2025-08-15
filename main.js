@@ -26,6 +26,7 @@ let mapWindow;
 let bubbleWindow;
 let waterReminderWindow;
 let petWindow;
+let todoWindow = null; // 待办窗口
 let contextMenuWindow = null;
 let transparencyWindow = null; // 添加右键菜单窗口跟踪
 let screenshots = null; // 第三方区域截屏实例
@@ -56,6 +57,11 @@ let currentPetTransparency = 100;
 
 // 全局旅行数据
 let globalTravelData = null;
+
+// 待办提醒相关变量
+let todoReminderTimer = null;
+let lastTodoReminderTime = 0;
+const TODO_REMINDER_INTERVAL = 30 * 60 * 1000; // 30分钟提醒一次
 
 // 旅行状态管理
 let currentTravelStatus = {
@@ -841,6 +847,16 @@ function createPetWindow() {
     }
   });
 
+  // 监听打开待办窗口请求
+  ipcMain.on('open-todo-window', (event) => {
+    console.log('Opening todo window from context menu');
+    try {
+      createTodoWindow();
+    } catch (error) {
+      console.error('Error opening todo window:', error);
+    }
+  });
+
   // 监听关闭右键菜单事件
   ipcMain.on('close-context-menu', (event) => {
     console.log('Closing context menu from external request');
@@ -907,6 +923,13 @@ function handleAIResponse(aiResponse) {
       }, 1200);
     }
 
+    // 如果AI判断需要添加待办，则自动添加到待办列表
+    if (aiResponse.actions?.todo?.shouldTrigger && aiResponse.actions.todo.content) {
+      setTimeout(() => {
+        addTodoFromAI(aiResponse.actions.todo.content);
+      }, 1500);
+    }
+
     // 切换宠物表情并设置状态复原
     if (aiResponse.emotion && petWindow && !petWindow.isDestroyed()) {
       try {
@@ -918,6 +941,54 @@ function handleAIResponse(aiResponse) {
     }
   } catch (e) {
     console.error('handleAIResponse error:', e);
+  }
+}
+
+// 从AI响应添加待办事项
+function addTodoFromAI(content) {
+  try {
+    // 将待办内容存储到localStorage中
+    const todoData = {
+      content: content,
+      timestamp: Date.now()
+    };
+
+    // 通过主进程的webContents执行localStorage操作
+    if (todoWindow && !todoWindow.isDestroyed()) {
+      todoWindow.webContents.executeJavaScript(`
+        localStorage.setItem('ai_todo_pending', '${JSON.stringify(todoData)}');
+        // 触发检查
+        if (typeof checkForAITodo === 'function') {
+          checkForAITodo();
+        }
+      `);
+      console.log('Todo data stored via localStorage:', content);
+    } else {
+      // 如果待办窗口未打开，先创建窗口
+      createTodoWindow();
+      // 等待窗口加载完成后存储数据
+      setTimeout(() => {
+        if (todoWindow && !todoWindow.isDestroyed()) {
+          todoWindow.webContents.executeJavaScript(`
+            localStorage.setItem('ai_todo_pending', '${JSON.stringify(todoData)}');
+            // 触发检查
+            if (typeof checkForAITodo === 'function') {
+              checkForAITodo();
+            }
+          `);
+          console.log('Todo data stored after window creation:', content);
+        } else {
+          // 如果窗口创建失败，显示提示信息
+          const message = `📝 AI已识别到待办事项：${content}\n请手动打开待办窗口添加！`;
+          createPetStatusWindow(message);
+        }
+      }, 1500);
+    }
+  } catch (error) {
+    console.error('Error adding todo from AI:', error);
+    // 出错时显示提示信息
+    const message = `📝 AI已识别到待办事项：${content}\n请手动打开待办窗口添加！`;
+    createPetStatusWindow(message);
   }
 }
 
@@ -1333,6 +1404,9 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     }
   });
 
+  // 待办窗口现在是完全独立的，不需要IPC通信
+  // 所有逻辑都在todoWindow.html中处理
+
   return mapWindow;
 }
 
@@ -1418,6 +1492,97 @@ function createWaterReminderWindow() {
     // 兜底：使用小旅星窗口展示消息
     const waterMessage = '💧 该喝水啦！记得保持水分补充哦～';
     createPetStatusWindow(waterMessage);
+  }
+}
+
+// 创建待办窗口
+function createTodoWindow() {
+  try {
+    if (todoWindow && !todoWindow.isDestroyed()) {
+      todoWindow.show();
+      todoWindow.focus();
+      return todoWindow;
+    }
+
+    todoWindow = new BrowserWindow({
+      width: 800,
+      height: 700,
+      frame: false,
+      alwaysOnTop: false,
+      resizable: true,
+      skipTaskbar: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true
+      },
+      movable: true,
+      focusable: true,
+      show: false
+    });
+
+    todoWindow.loadFile('todoWindow.html');
+
+    // 将窗口置于屏幕中央
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    todoWindow.setPosition(
+      Math.round((width - 800) / 2),
+      Math.round((height - 700) / 2)
+    );
+
+    todoWindow.once('ready-to-show', () => {
+      todoWindow.show();
+    });
+
+    todoWindow.on('closed', () => {
+      todoWindow = null;
+    });
+
+    return todoWindow;
+  } catch (error) {
+    console.error('Error creating todo window:', error);
+  }
+}
+
+// 启动待办提醒系统
+function startTodoReminder() {
+  if (todoReminderTimer) {
+    clearInterval(todoReminderTimer);
+  }
+
+  todoReminderTimer = setInterval(() => {
+    checkAndShowTodoReminder();
+  }, TODO_REMINDER_INTERVAL);
+
+  console.log('Todo reminder system started');
+}
+
+// 停止待办提醒系统
+function stopTodoReminder() {
+  if (todoReminderTimer) {
+    clearInterval(todoReminderTimer);
+    todoReminderTimer = null;
+  }
+  console.log('Todo reminder system stopped');
+}
+
+// 检查并显示待办提醒
+function checkAndShowTodoReminder() {
+  try {
+    const now = Date.now();
+    if (now - lastTodoReminderTime > TODO_REMINDER_INTERVAL) {
+      lastTodoReminderTime = now;
+
+      // 显示待办提醒
+      const reminderMessage = '📝 记得查看你的待办事项哦！';
+      createPetStatusWindow(reminderMessage);
+
+      console.log('Todo reminder shown');
+    }
+  } catch (error) {
+    console.error('Error showing todo reminder:', error);
   }
 }
 
@@ -1773,6 +1938,9 @@ app.whenReady().then(() => {
     setCreatePetStatusWindowFunction(createPetStatusWindow);
     setCreateWaterReminderWindowFunction(createWaterReminderWindow);
     activityMonitor = new ActivityMonitor();
+
+    // 启动待办提醒系统
+    startTodoReminder();
   }, 1000);
 }).catch(err => {
   console.error('Failed to initialize app:', err);
@@ -1800,6 +1968,9 @@ app.on('will-quit', () => {
   if (activityMonitor) {
     activityMonitor.destroy();
   }
+
+  // 停止待办提醒系统
+  stopTodoReminder();
 
   // 移除IPC监听器
   ipcMain.removeAllListeners('request-travel-info');

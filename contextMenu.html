@@ -15,6 +15,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            width: 100vw;
             -webkit-app-region: no-drag;
         }
 
@@ -25,6 +26,8 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             padding: 8px 0;
             min-width: 180px;
+            max-height: 80vh;
+            overflow-y: auto;
             -webkit-app-region: no-drag;
         }
 
@@ -102,6 +105,11 @@
             <span>旅行状态</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="openTodoWindow">
+            <span>📝</span>
+            <span>待办事项</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item transparency-control" id="transparencyControl">
             <span>🎨</span>
             <span>透明度调节</span>
@@ -118,6 +126,7 @@
             const { ipcRenderer } = require('electron');
             const openMainWindow = document.getElementById('openMainWindow');
             const openMapWindow = document.getElementById('openMapWindow');
+            const openTodoWindow = document.getElementById('openTodoWindow');
             const exitApp = document.getElementById('exitApp');
             const contextMenu = document.getElementById('contextMenu');
             const transparencyControl = document.getElementById('transparencyControl');
@@ -177,6 +186,17 @@
                     window.close();
                 } catch (error) {
                     console.error('Error showing travel status:', error);
+                }
+            });
+
+            // 打开待办窗口
+            openTodoWindow.addEventListener('click', () => {
+                console.log('Opening todo window from context menu');
+                try {
+                    ipcRenderer.send('open-todo-window');
+                    window.close();
+                } catch (error) {
+                    console.error('Error opening todo window:', error);
                 }
             });
 
