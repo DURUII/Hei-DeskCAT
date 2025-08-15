@@ -1,134 +1,120 @@
-# DeskTripper 🌍
 
-你的桌面小旅星 - 截图即响应，久坐会提醒，云旅行进行中
+# HeiDeskCat
 
-## 简介
+> HeiDeskCat：有灵魂的桌面 AI 陪伴
 
-DeskTripper是一款创新的桌面伴侣应用，它能：
-- 响应你的截图行为，智能识别内容并提供相关服务
-- 监测你的工作状态，在合适的时候提醒你休息
-- 提供云旅行体验，让你的虚拟旅星在地图上移动
+如果你相信 AI 应该有情商而不仅是智商，或者单纯喜欢罗小黑一样可可爱爱的国漫 IP，请为我们点个 ⭐！
 
-## 核心功能
+🤖🤖🤖 内源平台讨论链接：[查看演示视频](<removed>)
 
-### 1. 截图响应
-当你截取屏幕时（如按下 F2），DeskTripper会：
-- 快速识别截图内容
-- 使用AI分析截图，仅当识别为风景等内容时才触发旅行
-- 通过Windows原生通知显示AI回复
-- 当建议旅行时，显示气泡提示"替你去看[地点]？"
+## 背景与用户洞察
 
-### 2. 久坐提醒
-应用会监测你的活动状态：
-- 当检测到你长时间未活动时，会贴心提醒你起来走走
-- 根据不同场景提供个性化的提醒文案
+1. **AI + 情绪陪伴的蓝海机会**  
+   - 市面上 AI + 搜索/问答/工具 是红海，但 **AI + 情绪陪伴** 尚未被充分挖掘，参考[小红书独立开发大赛 2025](https://www.ifanr.com/1621805)。
+   - [GPT-4o替代爹味GPT-5！奥特曼光速滑跪，OpenAI连夜回滚「赛博舔狗」](https://mp.weixin.qq.com/s/RXLQtu5MoPg4G82af4dVrg) - 用户反馈GPT-5情商不如4o，说明对"有情商"的AI陪伴类应用有强烈期待。  
+   - 现有 AI 产品大多基于单一对话框（网页或语音接口），缺乏 **桌面级、持续存在的视觉 AI 形态**。
 
-### 3. 云旅行地图
-开启旅程后，会显示一个地图小窗：
-- 旅星以4px/s的速度在地图上移动
-- 实时显示天气Emoji和时间状态
-- 预计抵达时间及途中趣事
+2. **国产 IP 产业的崛起**  
+   - 从春节档《哪吒》到暑期档[《浪浪山小妖怪》](https://m.douban.com/movie/subject/36438475/)、[《罗小黑战记2》](https://movie.douban.com/subject/36448279/)，国产动漫 IP 热度持续攀升，二创不断，粉丝社群活跃。
 
-## 技术栈
+3. **桌面宠物的空白**  
+   - 虽有部分桌面宠物因"萌"出圈（如[捣蛋鹅](https://samperson.itch.io/desktop-goose)、[VPet](https://github.com/LorisYounger/VPet)、[Bongo Cat](https://mp.weixin.qq.com/s/1bVgHQXmTw5J9O9B3L6Bkg)），但缺乏"灵魂"，无法主动观察与情绪反馈。  
+   - 大模型可赋予桌面宠物主动感知与情绪交互能力。
 
-- Electron: 跨平台桌面应用框架
-- HTML/CSS/JavaScript: 前端界面技术
-- electron-store: 本地数据存储
-- OpenAI API (阿里云百炼平台): AI内容生成
-- 高德地图API: 地图服务和路径规划
 
-## 安装与运行
+## 用户故事
+
+| 场景描述                                                                                                                        | 演示效果                     |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **小馨（情绪陪伴+自动记待办）**<br/>刚入职的新人，工作繁忙，渴望倾诉与情绪慰藉，同时希望AI能自动识别截图中的待办事项并记录。    | ![demo](./demo/截图.gif)     |
+| **小刚（健康提醒）**<br/>工作狂，一坐一整天忘记喝水，期望桌面 AI 主动提醒健康习惯。                                             | ![demo](./demo/喝水提醒.gif) |
+| **小牛（云旅行）**<br/>热爱旅行，看到新闻上"这么近那么美周末到河北"，但工位限制了行动自由，希望感受"有人替他去旅行"的实时反馈。 | ![demo](./demo/旅行.gif)     |
+
+```mermaid
+graph TD
+  Start["启动应用"] --> FirstRun{"首次启动？"}
+  FirstRun -- "是" --> Onboarding["新人引导：<br/>- 权限/浮窗/通知说明<br/>- 快捷键设置与检测(F2/F3/F4/自定义)<br/>- 提醒选项(喝水/久坐/其他)<br/>- 本地隐私承诺(仅本地存储)\n"]
+  FirstRun -- "否" --> Idle["进入驻留：<br/>- 托盘/后台运行<br/>- 显示桌宠窗口(pet.html)"]
+  Onboarding --> Idle
+
+  %% 截图分析主线
+  Idle --> ScreenshotHotkey["按下截图快捷键(F2或自定义)"]
+  ScreenshotHotkey --> CropOverlay["屏幕区域截图<br/>(electron-screenshots)"]
+  CropOverlay --> AIAnalyze["AI多模态分析(aiService.js)：<br/>- 判断是否适合旅行<br/>- 识别待办事项<br/>- 生成短文案"]
+  AIAnalyze --> DecideAction{"AI判断结果？"}
+  DecideAction -- "旅行" --> Bubble["气泡(bubble.html)：<br/>展示文案 + 空格确认"]
+  DecideAction -- "待办" --> TodoAdd["自动添加待办<br/>(todoWindow.html)"]
+  DecideAction -- "其他" --> PetReact["宠物表情切换 + 状态窗口显示"]
+  Bubble --> StartJourneyEvent["用户确认 → 开始旅程"]
+  StartJourneyEvent --> TravelMap["地图窗口(map.html)：<br/>起点(用户定位/IP) → 目的地(解析自文案)"]
+  TravelMap --> DiaryLoop["旅程进行中：<br/>- 路线动画/进度条<br/>- 定时寄回旅行日记(真实时间/天气/方向)<br/>- 外链查看当地风景"]
+  DiaryLoop --> TravelEnd["到达/结束"]
+
+  %% 主动提醒
+  Idle --> RemindLoop["活动监控(activityMonitor.js)：<br/>久坐/喝水周期检测"]
+  RemindLoop --> RemindUI["提醒：<br/>- 原生通知<br/>- 喝水弹窗(waterReminder.html)<br/>- 趣味文案(AI生成)"]
+  RemindUI --> UserAct{"用户操作？"}
+  UserAct -- "已喝/稍后" --> BackIdle["关闭提醒并重置计时"]
+  UserAct -- "无响应" --> ContinueRemind["继续提醒循环"]
+  BackIdle --> Idle
+  ContinueRemind --> RemindLoop
+
+  %% 宠物交互
+  Idle --> PetClick["点击桌宠"]
+  PetClick --> FunReminder["触发趣味提醒<br/>(AI生成文案)"]
+  FunReminder --> Idle
+
+  %% 右键菜单
+  Idle --> RightClick["桌宠右键 → 上下文菜单(contextMenu.html)"]
+  RightClick --> Actions["操作：<br/>- 打开主页面(index.html)<br/>- 打开地图窗口<br/>- 打开待办窗口<br/>- 快捷键设置<br/>- 透明度调节<br/>- 退出应用"]
+  Actions --> Idle
+
+  %% 透明度调节
+  Idle --> TransparencyCtrl["透明度控制<br/>(transparencyWindow.html)"]
+  TransparencyCtrl --> Idle
+
+  %% 待办管理
+  TodoAdd --> TodoWindow["待办窗口(todoWindow.html)：<br/>- 查看待办列表<br/>- 标记完成<br/>- 删除待办"]
+  TodoWindow --> Idle
+```
+
+🤖🤖🤖 内源平台讨论链接：[查看演示视频](<removed>)
+
+
+## AI 赋能
+
+
+### 🤖 AI 开发记录
+
+| 阶段               | AI 角色      | 演示                                     | 产出                                                                                                                                                       |
+| ------------------ | ------------ | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 需求分析与竞品调研 | 市场分析专家 | ![gif](./docs/llm/20250806-research.gif) | [1. 产品需求文档 (PRD)](./docs/PRD.md)</br>[2. 市场调研报告](./docs/Research.docx)</br>[3. 版本 V1 文档](./docs/V1.md)</br>[4. 版本 V2 文档](./docs/V2.md) |
+| 前端交互设计       | 前端专家     | ![gif](./docs/llm/20250806-lingma.gif)   | 代码                                                                                                                                                       |
+| 功能实现与 Debug   | Debug专家    | ![gif](./docs/llm/20250806-kimi.gif)     | 代码                                                                                                                                                       |
+| Cursor AI 开发     | 前端专家     | ![gif](./docs/llm/20250812-Cursor.gif)   | 代码                                                                                                                                                       |
+
+- Cursor AI 对话记录：[杜睿](./docs/llm/20250812-cursor-du.md) 、[刘柏成1](./docs/llm/20250813-cursor-liu.md) 、[刘柏成2](./docs/llm/20250815-cursor-liu.md)
+- 全部 AI 对话留痕（持续更新中）：`./docs/llm`，`md`文件若大可能无法预览请下载查看。
+
+## 运行指南
 
 ```bash
-# 克隆项目
-git clone <repository-url>
+#进入项目目录
+cd src
 
-# 进入项目目录
-cd DeskTripper
-
-# 安装依赖
+# 安装 Node.js 与 npm
 npm install
-
-# 配置API Key（可选，用于AI功能和地图功能）
-# 复制.env.example为.env，并填入您的API Key
-cp .env.example .env
-# 编辑.env文件，填入您的DASHSCOPE_API_KEY和AMAP_KEY
-
-# 启动应用
 npm start
 ```
 
-## AI功能说明
+参考 `.env.example`，配置：
+- [阿里云百炼 API](https://bailian.console.aliyun.com/?tab=model#/api-key)（情绪陪伴功能）
+- [高德地图 API](https://console.amap.com/dev/key/app)（云旅行功能）
 
-即使未配置API Key，应用也能正常工作：
-- 默认会随机返回有趣的回复
-- 50%概率触发旅行功能
-- 所有提醒功能正常使用
+---
 
-当配置了API Key后：
-- AI会分析截图内容，判断是否适合旅行
-- 只有风景等内容才会触发旅行功能
-- 所有回复都由AI生成，更加智能有趣
+## 未来计划
 
-## 高德地图功能说明
-
-应用集成了高德地图API，提供以下功能：
-- 路径规划：计算旅星移动路线
-- 天气查询：获取目的地实时天气
-- 地点搜索：根据关键词搜索地点
-- 静态地图：生成基础地图图片
-
-## API功能配置
-
-### 阿里云百炼平台配置
-1. 注册[阿里云百炼平台](https://dashscope.aliyun.com/)账号
-2. 获取API Key
-3. 在`.env`文件中填入您的API Key:
-   ```
-   DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   ```
-
-### 高德地图API配置
-1. 注册[高德地图开放平台](https://console.amap.com/)账号
-2. 创建应用并获取API Key
-3. 在`.env`文件中填入您的API Key:
-   ```
-   AMAP_KEY=your_amap_api_key_here
-   ```
-
-4. 重启应用以使配置生效
-
-## 快捷键说明
-
-- `F2`: 截图并触发AI分析
-- `F3`: 手动触发喝水提醒
-- `F4`: 手动触发趣味提醒
-
-## 使用说明
-
-1. 按F2进行截图
-2. 查看Windows通知中的AI回复
-3. 如果是风景等内容，会显示"替你去看[地点]？"的气泡提示
-4. 按空格键或点击气泡可开启旅程
-5. 旅程窗口会显示在右上角，可拖动调整位置
-
-## 开发计划
-
-- Week1：截图响应闭环
-- Week2：久坐提醒 + 喝水动效
-- Week3：地图小窗 + 天气Emoji
-- Week4：灰度500用户，看D1是否≥30%
-
-## 设计理念
-
-> "别让用户去适应功能，让功能去适应用户的呼吸节奏。"
-
-我们注重用户体验的每一个细节：
-- 微信式克制：绝不弹"您"，全部用"你"
-- 气泡最多22字，超出用"…"折叠
-- 情绪化颜色反馈：不同情绪用不同颜色表示
-- 有趣的微交互和动效
-
-## 许可证
-
-MIT
+* 声音克隆（[SparkTTS](https://github.com/SparkAudio/Spark-TTS)）实现更拟人化的语音交互（BBS展示视频中声音为AI克隆声音，使用视频后期，计划中）
+* 前端采用 three.js 打造更细致的视觉表现，增强 AI 情绪识别与多轮主动对话能力
+* 桌面行为模式学习与个性化推荐
