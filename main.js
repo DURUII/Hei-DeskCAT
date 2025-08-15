@@ -186,7 +186,8 @@ function createPetWindow() {
       contextIsolation: false
     },
     movable: true, // 允许窗口移动
-    focusable: true // 允许窗口获得焦点
+    focusable: true, // 允许窗口获得焦点
+    type: 'toolbar' // 设置为工具栏类型，确保始终在最顶层
   });
 
   petWindow.loadFile('pet.html');
@@ -207,6 +208,32 @@ function createPetWindow() {
   // 设置窗口可以拖拽
   petWindow.setMovable(true);
 
+  // 确保窗口始终在最顶层
+  petWindow.setAlwaysOnTop(true, 'screen-saver');
+
+  // 监听窗口失去焦点事件，确保重新置顶
+  petWindow.on('blur', () => {
+    if (!petWindow.isDestroyed()) {
+      petWindow.setAlwaysOnTop(true, 'screen-saver');
+    }
+  });
+
+  // 监听窗口隐藏事件，确保重新显示时置顶
+  petWindow.on('show', () => {
+    if (!petWindow.isDestroyed()) {
+      petWindow.setAlwaysOnTop(true, 'screen-saver');
+    }
+  });
+
+  // 定期检查并确保窗口始终在最顶层
+  const ensureTopMost = setInterval(() => {
+    if (petWindow && !petWindow.isDestroyed() && petWindow.isVisible()) {
+      petWindow.setAlwaysOnTop(true, 'screen-saver');
+    } else {
+      clearInterval(ensureTopMost);
+    }
+  }, 5000); // 每5秒检查一次
+
   // 监听宠物点击事件
   petWindow.webContents.on('dom-ready', () => {
     petWindow.webContents.executeJavaScript(`
@@ -214,16 +241,8 @@ function createPetWindow() {
         const pet = document.getElementById('pet');
         if (pet) {
           pet.addEventListener('click', () => {
-            const messages = [
-              '正在冰岛看极光✨',
-              '在挪威森林里探险🌲',
-              '于撒哈拉沙漠看星星🌟',
-              '在日本樱花树下喝茶🌸',
-              '在瑞士阿尔卑斯山滑雪⛷️'
-            ];
-            const message = messages[Math.floor(Math.random() * messages.length)];
-            console.log('Pet clicked, sending message:', message);
-            require('electron').ipcRenderer.send('pet-clicked', message);
+            console.log('Pet clicked, triggering fun reminder');
+            require('electron').ipcRenderer.send('pet-clicked');
           });
           console.log('Pet click event listener added successfully');
         } else {
@@ -238,17 +257,9 @@ function createPetWindow() {
   });
 
   // 监听宠物点击事件 - 触发趣味提醒
-  ipcMain.on('pet-clicked', async (event) => {
+  ipcMain.on('pet-clicked', (event) => {
     console.log('Pet clicked, triggering fun reminder');
-    try {
-      // 生成AI趣味提醒
-      const funMessage = await generateFunReminder();
-      createPetStatusWindow(funMessage);
-    } catch (error) {
-      console.error('Error creating fun reminder:', error);
-      // 如果生成失败，显示默认消息
-      createPetStatusWindow('今天也要开开心心的哦！✨');
-    }
+    showFunReminder();
   });
 
   // 监听打开主窗口事件
@@ -1043,11 +1054,16 @@ function togglePetWindow() {
       } else {
         petWindow.show();
         petWindow.focus();
+        petWindow.setAlwaysOnTop(true, 'screen-saver');
         console.log('Pet window shown');
       }
     } else {
       // 如果宠物窗口不存在，创建新的
       createPetWindow();
+      // 确保新创建的窗口也置顶
+      if (petWindow && !petWindow.isDestroyed()) {
+        petWindow.setAlwaysOnTop(true, 'screen-saver');
+      }
       console.log('Pet window created');
     }
   } catch (error) {
@@ -2075,10 +2091,8 @@ ipcMain.on('manual-water-reminder', () => {
 });
 
 // IPC事件处理：手动触发趣味提醒
-ipcMain.on('manual-fun-reminder', async () => {
-  // 生成AI趣味提醒
-  const funMessage = await generateFunReminder();
-  createPetStatusWindow(funMessage);
+ipcMain.on('manual-fun-reminder', () => {
+  showFunReminder();
 });
 
 // IPC事件处理：显示当前旅程状态
