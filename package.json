@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node scripts/start.js",
     "dev": "node scripts/start.js --dev",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "build:win": "node scripts/build.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
   "repository": {
     "type": "git",
@@ -34,5 +37,37 @@
     "electron-screenshots": "^0.5.27",
     "electron-store": "^8.1.0",
     "openai": "^4.0.0"
+  },
+  "build": {
+    "appId": "com.desktripper.app",
+    "productName": "DeskTripper",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "*.html",
+      "*.js",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DeskTripper"
+    }
   }
 }
