@@ -1033,24 +1033,35 @@ function addTodoFromAI(content) {
       console.log('Todo data stored via localStorage:', content);
     } else {
       // 如果待办窗口未打开，先创建窗口
-      createTodoWindow();
-      // 等待窗口加载完成后存储数据
-      setTimeout(() => {
-        if (todoWindow && !todoWindow.isDestroyed()) {
-          todoWindow.webContents.executeJavaScript(`
-            localStorage.setItem('ai_todo_pending', '${JSON.stringify(todoData)}');
-            // 触发检查
-            if (typeof checkForAITodo === 'function') {
-              checkForAITodo();
+      console.log('Todo window does not exist, creating new window');
+      const newTodoWindow = createTodoWindow();
+
+      if (newTodoWindow) {
+        // 等待窗口完全加载后再存储数据
+        newTodoWindow.webContents.once('did-finish-load', () => {
+          console.log('Todo window loaded, storing data');
+          setTimeout(() => {
+            if (newTodoWindow && !newTodoWindow.isDestroyed()) {
+              newTodoWindow.webContents.executeJavaScript(`
+                localStorage.setItem('ai_todo_pending', '${JSON.stringify(todoData)}');
+                // 触发检查
+                if (typeof checkForAITodo === 'function') {
+                  checkForAITodo();
+                }
+              `);
+              console.log('Todo data stored after window creation:', content);
+            } else {
+              console.error('Todo window was destroyed before data could be stored');
+              const message = `📝 AI已识别到待办事项：${content}\n请手动打开待办窗口添加！`;
+              createPetStatusWindow(message);
             }
-          `);
-          console.log('Todo data stored after window creation:', content);
-        } else {
-          // 如果窗口创建失败，显示提示信息
-          const message = `📝 AI已识别到待办事项：${content}\n请手动打开待办窗口添加！`;
-          createPetStatusWindow(message);
-        }
-      }, 1500);
+          }, 500); // 减少等待时间
+        });
+      } else {
+        console.error('Failed to create todo window');
+        const message = `📝 AI已识别到待办事项：${content}\n请手动打开待办窗口添加！`;
+        createPetStatusWindow(message);
+      }
     }
   } catch (error) {
     console.error('Error adding todo from AI:', error);
