@@ -105,6 +105,28 @@
 
             console.log('Transparency window script loaded successfully');
 
+            // 鼠标悬停时暂停自动关闭功能
+            let autoCloseTimer;
+            let isMouseHovering = false;
+
+            const startAutoClose = () => {
+                if (autoCloseTimer) {
+                    clearTimeout(autoCloseTimer);
+                }
+                autoCloseTimer = setTimeout(() => {
+                    if (transparencyPanel && !isMouseHovering) {
+                        transparencyPanel.classList.add('fade-out');
+                        // 通知右键菜单透明度窗口已关闭
+                        try {
+                            ipcRenderer.send('transparency-window-status', false);
+                            ipcRenderer.send('transparency-window-closed');
+                        } catch (error) {
+                            console.error('Error notifying transparency window status:', error);
+                        }
+                    }
+                }, 4500);
+            };
+
             // 接收当前透明度值
             ipcRenderer.on('current-pet-transparency', (event, transparency) => {
                 console.log('Received current pet transparency:', transparency);
@@ -120,17 +142,7 @@
             }
 
             // 自动关闭功能（4.5秒后开始淡出，5秒后关闭）
-            setTimeout(() => {
-                if (transparencyPanel) {
-                    transparencyPanel.classList.add('fade-out');
-                    // 通知右键菜单透明度窗口已关闭
-                    try {
-                        ipcRenderer.send('transparency-window-status', false);
-                    } catch (error) {
-                        console.error('Error notifying transparency window status:', error);
-                    }
-                }
-            }, 4500);
+            startAutoClose();
 
             // 透明度调节
             transparencySlider.addEventListener('input', (e) => {
@@ -152,6 +164,7 @@
                     // 通知右键菜单透明度窗口已关闭
                     try {
                         ipcRenderer.send('transparency-window-status', false);
+                        ipcRenderer.send('transparency-window-closed');
                     } catch (error) {
                         console.error('Error notifying transparency window status:', error);
                     }
@@ -165,6 +178,7 @@
                 // 通知右键菜单透明度窗口已关闭
                 try {
                     ipcRenderer.send('transparency-window-status', false);
+                    ipcRenderer.send('transparency-window-closed');
                 } catch (error) {
                     console.error('Error notifying transparency window status:', error);
                 }
@@ -177,6 +191,7 @@
                     // 通知右键菜单透明度窗口已关闭
                     try {
                         ipcRenderer.send('transparency-window-status', false);
+                        ipcRenderer.send('transparency-window-closed');
                     } catch (error) {
                         console.error('Error notifying transparency window status:', error);
                     }
@@ -195,35 +210,23 @@
                 }
             });
 
-            // 鼠标悬停时重置自动关闭计时器
-            let autoCloseTimer;
-            const resetAutoClose = () => {
-                if (autoCloseTimer) {
-                    clearTimeout(autoCloseTimer);
-                }
-                autoCloseTimer = setTimeout(() => {
-                    if (transparencyPanel) {
-                        transparencyPanel.classList.add('fade-out');
-                        // 通知右键菜单透明度窗口已关闭
-                        try {
-                            ipcRenderer.send('transparency-window-status', false);
-                        } catch (error) {
-                            console.error('Error notifying transparency window status:', error);
-                        }
-                    }
-                }, 4500);
-            };
-
             // 监听鼠标进入和离开
             transparencyPanel.addEventListener('mouseenter', () => {
+                isMouseHovering = true;
                 if (transparencyPanel.classList.contains('fade-out')) {
                     transparencyPanel.classList.remove('fade-out');
                 }
-                resetAutoClose();
+                // 鼠标悬停时清除自动关闭计时器
+                if (autoCloseTimer) {
+                    clearTimeout(autoCloseTimer);
+                    autoCloseTimer = null;
+                }
             });
 
             transparencyPanel.addEventListener('mouseleave', () => {
-                resetAutoClose();
+                isMouseHovering = false;
+                // 鼠标离开时重新开始自动关闭计时器
+                startAutoClose();
             });
 
             console.log('Transparency window event listeners added successfully');

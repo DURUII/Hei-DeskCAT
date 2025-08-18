@@ -140,11 +140,13 @@
             console.log('Context menu window script loaded successfully');
 
             // 自动关闭功能（4.5秒后开始淡出，5秒后关闭）
-            // 但是如果有展开的透明度控制，则不自动关闭
+            // 但是如果有展开的透明度控制或透明度窗口打开，则不自动关闭
             setTimeout(() => {
                 const isTransparencyExpanded = transparencyControl.classList.contains('expanded');
-                if (!isTransparencyExpanded && contextMenu) {
+                if (!isTransparencyExpanded && !isTransparencyWindowOpen && contextMenu) {
                     contextMenu.classList.add('fade-out');
+                } else {
+                    console.log('Keeping context menu open (transparency control active)');
                 }
             }, 4500);
 
@@ -271,14 +273,30 @@
 
             // 监听窗口失去焦点时关闭
             window.addEventListener('blur', () => {
-                console.log('Window lost focus, closing...');
-                window.close();
+                // 如果有透明度窗口打开，不关闭右键菜单
+                if (!isTransparencyWindowOpen) {
+                    console.log('Window lost focus, closing...');
+                    window.close();
+                } else {
+                    console.log('Window lost focus but transparency window is open, keeping menu open');
+                }
             });
 
             // ESC键关闭
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
-                    window.close();
+                    // 如果有透明度窗口打开，先关闭透明度窗口
+                    if (isTransparencyWindowOpen) {
+                        try {
+                            ipcRenderer.send('close-transparency-window');
+                            transparencyControl.classList.remove('expanded');
+                            isTransparencyWindowOpen = false;
+                        } catch (error) {
+                            console.error('Error closing transparency window on ESC:', error);
+                        }
+                    } else {
+                        window.close();
+                    }
                 }
             });
 

@@ -759,7 +759,10 @@ function createPetWindow() {
         movable: false,
         focusable: true,
         x: x,
-        y: y
+        y: y,
+        // 确保透明度窗口在右键菜单之上显示，但不关闭右键菜单
+        parent: contextMenuWindow,
+        modal: false
       });
 
       newTransparencyWindow.loadFile('transparencyWindow.html');
@@ -807,15 +810,28 @@ function createPetWindow() {
   ipcMain.on('transparency-window-closed', (event) => {
     console.log('Transparency window closed by user action');
     transparencyWindow = null;
+
+    // 透明度窗口关闭后，检查是否需要关闭右键菜单
+    if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+      // 延迟关闭右键菜单，给用户一些时间
+      setTimeout(() => {
+        if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
+          console.log('Closing context menu after transparency window closed');
+          contextMenuWindow.close();
+        }
+      }, 1000); // 1秒后关闭右键菜单
+    }
   });
 
   // 监听透明度窗口打开事件
   ipcMain.on('transparency-window-opened', (event) => {
     console.log('Transparency window opened');
-    // 通知右键菜单透明度窗口状态
+    // 通知右键菜单透明度窗口状态，并保持右键菜单打开
     if (contextMenuWindow && !contextMenuWindow.isDestroyed()) {
       try {
         contextMenuWindow.webContents.send('transparency-window-status', true);
+        // 确保右键菜单保持在前台
+        contextMenuWindow.setAlwaysOnTop(true, 'screen-saver');
       } catch (error) {
         console.error('Error sending transparency window status to context menu:', error);
       }
@@ -1486,7 +1502,10 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
       enableRemoteModule: true
     },
     movable: false,
-    focusable: true
+    focusable: true,
+    // 确保右键菜单在桌宠之上显示
+    parent: petWindow,
+    modal: false
   });
 
   newContextMenuWindow.loadFile('contextMenu.html');
@@ -1555,12 +1574,17 @@ function createContextMenuWindow(x, y, petPosition = [0, 0]) {
     console.log('Context menu window closing...');
   });
 
-  // 自动关闭功能
+  // 自动关闭功能 - 只有在没有透明度窗口打开时才自动关闭
   setTimeout(() => {
     try {
       if (newContextMenuWindow && !newContextMenuWindow.isDestroyed()) {
-        console.log('Auto-closing context menu window');
-        newContextMenuWindow.close();
+        // 检查是否有透明度窗口打开
+        if (!transparencyWindow || transparencyWindow.isDestroyed()) {
+          console.log('Auto-closing context menu window (no transparency window open)');
+          newContextMenuWindow.close();
+        } else {
+          console.log('Keeping context menu open (transparency window is active)');
+        }
       }
     } catch (error) {
       console.error('Error auto-closing context menu window:', error);
