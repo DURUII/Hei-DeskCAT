@@ -509,7 +509,23 @@
             try {
                 const saved = localStorage.getItem('todos');
                 if (saved) {
-                    todos = JSON.parse(saved);
+                    const rawTodos = JSON.parse(saved);
+                    // 过滤掉无效数据
+                    todos = rawTodos.filter(todo => {
+                        // 检查必要字段是否存在
+                        if (!todo.id || !todo.text) {
+                            console.warn('Filtering out todo with missing required fields:', todo);
+                            return false;
+                        }
+
+                        return true;
+                    });
+
+                    // 如果有数据被过滤掉，保存清理后的数据
+                    if (todos.length !== rawTodos.length) {
+                        console.log(`Filtered out ${rawTodos.length - todos.length} invalid todos`);
+                        saveTodos();
+                    }
                 }
             } catch (error) {
                 console.error('Error loading todos:', error);
@@ -519,6 +535,40 @@
 
         // 渲染待办列表
         function renderTodos() {
+            // 过滤无效数据（基于formatTime返回结果）
+            const validTodos = todos.filter(todo => {
+                // 检查必要字段
+                if (!todo.id || !todo.text) {
+                    console.warn('Filtering out todo with missing fields during render:', todo);
+                    return false;
+                }
+
+                // 检查创建时间有效性（基于formatTime返回结果）
+                const createdTimeStr = formatTime(todo.createdAt);
+                if (createdTimeStr === '时间无效' || completedTimeStr === '未知时间') {
+                    console.warn('Filtering out todo with invalid createdAt during render:', todo);
+                    return false;
+                }
+
+                // 检查完成时间有效性（如果存在）
+                if (todo.completedAt) {
+                    const completedTimeStr = formatTime(todo.completedAt);
+                    if (completedTimeStr === '时间无效' || completedTimeStr === '未知时间') {
+                        console.warn('Filtering out todo with invalid completedAt during render:', todo);
+                        // 清除无效的完成时间，但不删除整个待办
+                        todo.completedAt = null;
+                    }
+                }
+
+                return true;
+            });
+
+            // 如果过滤后的数据与原始数据不同，更新todos数组
+            if (validTodos.length !== todos.length) {
+                todos = validTodos;
+                saveTodos();
+            }
+
             if (todos.length === 0) {
                 todoList.innerHTML = `
                     <div class="empty-state">
@@ -564,7 +614,18 @@
 
         // 格式化时间
         function formatTime(isoString) {
+            if (!isoString) {
+                return '未知时间';
+            }
+
             const date = new Date(isoString);
+
+            // 检查日期是否有效
+            if (isNaN(date.getTime())) {
+                console.warn('Invalid date string:', isoString);
+                return '时间无效';
+            }
+
             const now = new Date();
             const diff = now - date;
 
