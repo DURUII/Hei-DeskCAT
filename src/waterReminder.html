@@ -62,8 +62,8 @@
       bottom: 80px;
       display: flex;
       justify-content: center;
-      gap: 10px;
-      /* 保持按钮间距 */
+      gap: 20px;
+      /* 增加按钮间距，避免重叠 */
       z-index: 99999;
       /* 远高于容器与系统遮罩 */
       pointer-events: none;
@@ -90,7 +90,7 @@
       border-radius: 20px;
       cursor: pointer;
       font-size: 14px;
-      transition: all 0.2s;
+      transition: all 0.3s ease;
       color: white;
     }
 
@@ -330,7 +330,7 @@
       }
     }
 
-    // No 按钮点击事件（模仿捣蛋鹅）
+    // No 按钮点击事件（按钮变小直到消失）
     noButton.addEventListener("click", function () {
       clickCount++;
 
@@ -338,11 +338,13 @@
       const yesSize = Math.min(1 + clickCount * 0.18, 2.3);
       yesButton.style.transform = `scale(${yesSize})`;
 
-      // 让 No 按钮逐步逃离窗口（向右移动直到完全不可见）
-      const offRight = Math.floor(window.innerWidth / 2) + 480; // 逃逸上限
-      const step = Math.max(60 - clickCount * 4, 24); // 前期快一点，后期更柔和
-      const noOffset = Math.min((clickCount * step) ** 1.05, offRight);
-      noButton.style.transform = `translateX(${noOffset}px)`;
+      // 让 No 按钮逐步变小，最小保持20%大小避免文字看不清
+      const noScale = Math.max(1 - clickCount * 0.15, 0.2); // 每次点击缩小15%，最小到0.2
+      noButton.style.transform = `scale(${noScale})`;
+
+      // 动态调整按钮间距，避免重叠
+      const dynamicGap = Math.max(20 + clickCount * 15, 50); // 基础20px + 每次点击增加15px，最小50px
+      buttonsLayer.style.gap = `${dynamicGap}px`;
 
       // 让图片和文字保持原位，不随水位上升
       mainImage.style.transform = 'translateY(0)';
@@ -362,6 +364,10 @@
       if (clickCount >= 10) {
         questionText.innerText = '啊我死了…快喝水！';
         yesButton.innerText = '复活';
+
+        // 完全隐藏No按钮
+        noButton.style.opacity = '0';
+        noButton.style.pointerEvents = 'none';
       }
     });
 

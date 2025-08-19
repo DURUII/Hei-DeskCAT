@@ -368,11 +368,28 @@ async function analyzeScreenshot(base64Image) {
 
 /**
  * 生成趣味提醒内容
+ * @param {Date} currentTime - 当前时间，用于生成合适的时间相关提醒
  * @returns {Promise<string>} 生成的提醒文本
  */
-async function generateFunReminder() {
+async function generateFunReminder(currentTime = new Date()) {
     // 获取桌宠设置
     const petSettings = getCurrentPetSettings();
+
+    // 获取当前时间信息
+    const hour = currentTime.getHours();
+    const minute = currentTime.getMinutes();
+
+    // 根据时间生成合适的问候语
+    let timeGreeting = '';
+    if (hour >= 5 && hour < 12) {
+        timeGreeting = '早上好';
+    } else if (hour >= 12 && hour < 18) {
+        timeGreeting = '下午好';
+    } else if (hour >= 18 && hour < 22) {
+        timeGreeting = '晚上好';
+    } else {
+        timeGreeting = '夜深了';
+    }
 
     // 即使没有配置API Key，也返回默认提醒
     try {
@@ -380,10 +397,12 @@ async function generateFunReminder() {
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("API Key not configured, returning default reminder");
             const defaultReminders = [
-                `${petSettings.petName}提醒你该休息一下啦！✨`,
-                `${petSettings.petName}觉得你工作很认真呢！💪`,
-                `${petSettings.petName}想和你聊聊天～😊`,
-                `${petSettings.petName}觉得你该喝口水了！💧`
+                `${petSettings.petName}${timeGreeting}！工作累了吗？休息一下吧～✨`,
+                `${petSettings.petName}觉得你工作很认真呢！继续保持！💪`,
+                `${petSettings.petName}想和你聊聊天～有什么有趣的事情吗？😊`,
+                `${petSettings.petName}发现你专注的样子很可爱呢！🌟`,
+                `${petSettings.petName}提醒你该放松一下啦！深呼吸～🌬️`,
+                `${petSettings.petName}觉得你的努力一定会得到回报的！加油！🚀`
             ];
             return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
         }
@@ -395,14 +414,21 @@ async function generateFunReminder() {
                     role: "system",
                     content: `${petSettings.petCharacter}
 
-                    你是${petSettings.petName}，一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字，要符合你的性格特点。`
+                    你是${petSettings.petName}，一个有趣的桌面伴侣助手。现在时间是${hour}:${minute.toString().padStart(2, '0')}，${timeGreeting}。
+
+                    你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。注意：
+                    1. 不要生成关于喝水或久坐的提醒（这些由专门的提醒处理）
+                    2. 根据当前时间生成合适的问候语
+                    3. 保持简短，不超过25个字
+                    4. 要符合你的性格特点
+                    5. 可以是工作鼓励、生活感悟、轻松话题等`
                 },
                 {
                     role: "user",
-                    content: "给我生成一个有趣的提醒消息"
+                    content: `现在是${timeGreeting}，给我生成一个有趣的提醒消息`
                 }
             ],
-            max_tokens: 50
+            max_tokens: 80
         });
 
         return completion.choices[0].message.content.trim();
@@ -410,10 +436,118 @@ async function generateFunReminder() {
         console.error('Error occurred during AI reminder generation:', error);
         // 出错时返回默认提醒
         const defaultReminders = [
-            `${petSettings.petName}提醒你该休息一下啦！✨`,
-            `${petSettings.petName}觉得你工作很认真呢！💪`,
-            `${petSettings.petName}想和你聊聊天～😊`,
-            `${petSettings.petName}觉得你该喝口水了！💧`
+            `${petSettings.petName}${timeGreeting}！工作累了吗？休息一下吧～✨`,
+            `${petSettings.petName}觉得你工作很认真呢！继续保持！💪`,
+            `${petSettings.petName}想和你聊聊天～有什么有趣的事情吗？😊`,
+            `${petSettings.petName}发现你专注的样子很可爱呢！🌟`,
+            `${petSettings.petName}提醒你该放松一下啦！深呼吸～🌬️`,
+            `${petSettings.petName}觉得你的努力一定会得到回报的！加油！🚀`
+        ];
+        return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
+    }
+}
+
+/**
+ * 生成喝水提醒内容
+ * @returns {Promise<string>} 生成的喝水提醒文本
+ */
+async function generateWaterReminder() {
+    // 获取桌宠设置
+    const petSettings = getCurrentPetSettings();
+
+    // 即使没有配置API Key，也返回默认提醒
+    try {
+        // 如果没有配置API Key，则返回默认提醒
+        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+            console.log("API Key not configured, returning default water reminder");
+            const defaultReminders = [
+                `${petSettings.petName}提醒你该喝水啦！💧 再不喝水就要变成仙人掌了～`,
+                `${petSettings.petName}说：主人，你已经很久没有喝水了，来杯水吧～☕`,
+                `${petSettings.petName}担心你：水是生命之源，快来补充能量！💪`,
+                `${petSettings.petName}提醒：该喝水啦！保持水分才能继续工作哦～✨`
+            ];
+            return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
+        }
+
+        const completion = await openai.chat.completions.create({
+            model: "qwen-plus",
+            messages: [
+                {
+                    role: "system",
+                    content: `${petSettings.petCharacter}
+
+                    你是${petSettings.petName}，一个有趣的桌面伴侣助手。你需要生成一个提醒用户喝水的消息。保持简短，不超过30个字，要符合你的性格特点，可以用可爱、幽默或关心的语气。`
+                },
+                {
+                    role: "user",
+                    content: "提醒用户该喝水了"
+                }
+            ],
+            max_tokens: 80
+        });
+
+        return completion.choices[0].message.content.trim();
+    } catch (error) {
+        console.error('Error occurred during AI water reminder generation:', error);
+        // 出错时返回默认提醒
+        const defaultReminders = [
+            `${petSettings.petName}提醒你该喝水啦！💧 再不喝水就要变成仙人掌了～`,
+            `${petSettings.petName}说：主人，你已经很久没有喝水了，来杯水吧～☕`,
+            `${petSettings.petName}担心你：水是生命之源，快来补充能量！💪`,
+            `${petSettings.petName}提醒：该喝水啦！保持水分才能继续工作哦～✨`
+        ];
+        return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
+    }
+}
+
+/**
+ * 生成久坐提醒内容
+ * @returns {Promise<string>} 生成的久坐提醒文本
+ */
+async function generateInactivityReminder() {
+    // 获取桌宠设置
+    const petSettings = getCurrentPetSettings();
+
+    // 即使没有配置API Key，也返回默认提醒
+    try {
+        // 如果没有配置API Key，则返回默认提醒
+        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+            console.log("API Key not configured, returning default inactivity reminder");
+            const defaultReminders = [
+                `${petSettings.petName}提醒你：起来走两步，不然椅子会长你身上！🏃‍♂️`,
+                `${petSettings.petName}说：主人，该活动一下啦！坐太久对身体不好哦～💪`,
+                `${petSettings.petName}担心你：起来活动一下吧！久坐对身体不好呢～✨`,
+                `${petSettings.petName}提醒：该起来走走了！活动一下身体会更健康～😊`
+            ];
+            return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
+        }
+
+        const completion = await openai.chat.completions.create({
+            model: "qwen-plus",
+            messages: [
+                {
+                    role: "system",
+                    content: `${petSettings.petCharacter}
+
+                    你是${petSettings.petName}，一个有趣的桌面伴侣助手。你需要生成一个提醒用户起来活动的消息。保持简短，不超过30个字，要符合你的性格特点，可以用可爱、幽默或关心的语气。`
+                },
+                {
+                    role: "user",
+                    content: "提醒用户该起来活动了"
+                }
+            ],
+            max_tokens: 80
+        });
+
+        return completion.choices[0].message.content.trim();
+    } catch (error) {
+        console.error('Error occurred during AI inactivity reminder generation:', error);
+        // 出错时返回默认提醒
+        const defaultReminders = [
+            `${petSettings.petName}提醒你：起来走两步，不然椅子会长你身上！🏃‍♂️`,
+            `${petSettings.petName}说：主人，该活动一下啦！坐太久对身体不好哦～💪`,
+            `${petSettings.petName}担心你：起来活动一下吧！久坐对身体不好呢～✨`,
+            `${petSettings.petName}提醒：该起来走走了！活动一下身体会更健康～😊`
         ];
         return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
     }
@@ -520,6 +654,8 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
 module.exports = {
     analyzeScreenshot,
     generateFunReminder,
+    generateWaterReminder,
+    generateInactivityReminder,
     generateJourneyStatusWithLocation,
     updatePetSettings,
     getCurrentPetSettings
