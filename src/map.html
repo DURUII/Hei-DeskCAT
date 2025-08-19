@@ -485,7 +485,7 @@
         </div>
 
         <div class="status-text" id="status-text">
-            预计11小时后抵达，每小时寄回一张照片
+            预计11小时后抵达
         </div>
     </div>
 
@@ -1443,6 +1443,26 @@
                     stopTravelAnimation();
                     statusText.textContent = '已抵达目的地！';
                     debugInfo.textContent = '旅行完成';
+
+                    // 发送旅行完成事件到主进程
+                    try {
+                        const travelCompleteData = {
+                            route: {
+                                origin: currentLocation.textContent,
+                                destination: destLocation.textContent
+                            },
+                            weather: currentWeatherData,
+                            summary: {
+                                distance: totalDistance,
+                                duration: Math.round((Date.now() - travelStartTime) / (1000 * 60 * 60)), // 小时
+                                avgSpeed: currentSpeedKmh,
+                                photoCount: Math.floor(Math.random() * 20) + 10 // 模拟照片数量
+                            }
+                        };
+                        ipcRenderer.send('travel-completed', travelCompleteData);
+                    } catch (error) {
+                        console.error('Error sending travel completed event:', error);
+                    }
                 }
             }
 
@@ -1539,7 +1559,7 @@
             } else {
                 const remainingProgress = 100 - progress;
                 const remainingHours = Math.max(0, Math.floor(remainingProgress / 100 * 11));
-                statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
+                statusText.textContent = `预计${remainingHours}小时后抵达`;
             }
         }
 
@@ -1563,7 +1583,7 @@
                 progress.style.width = progressPercent + '%';
 
                 const remainingHours = Math.max(0, Math.floor((100 - progressPercent) / 100 * 11));
-                statusText.textContent = `预计${remainingHours}小时后抵达，每小时寄回一张照片`;
+                statusText.textContent = `预计${remainingHours}小时后抵达`;
 
                 if (progressPercent >= 100) {
                     clearInterval(moveInterval);

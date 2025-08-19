@@ -29,6 +29,8 @@ let petWindow;
 let todoWindow = null; // 待办窗口
 let shortcutSettingsWindow = null; // 快捷键设置窗口
 let petSettingsWindow = null; // 桌宠设置窗口
+let travelCompleteWindow = null; // 旅行完成窗口
+let travelProgressWindow = null; // 旅行进行中提示窗口
 let contextMenuWindow = null;
 let transparencyWindow = null; // 添加右键菜单窗口跟踪
 let screenshots = null; // 第三方区域截屏实例
@@ -1002,11 +1004,35 @@ function handleAIResponse(aiResponse) {
     // 使用小旅星窗口显示AI回复
     createPetStatusWindow(aiResponse.message);
 
-    // 如果AI判断需要触发旅行，则显示气泡提示
+    // 如果AI判断需要触发旅行，则检查当前旅行状态
     if (aiResponse.actions?.travel?.shouldTrigger) {
-      setTimeout(() => {
-        showScreenshotBubble(aiResponse.actions.travel.destination);
-      }, 1200);
+      // 保存AI识别到的目的地，用于重新开始旅行
+      const newDestination = aiResponse.actions.travel.destination;
+
+      // 将新目的地保存到全局数据中
+      if (!globalTravelData) {
+        globalTravelData = {};
+      }
+      globalTravelData.aiNewDestination = newDestination;
+
+      // 检查是否已有进行中的旅行
+      if (currentTravelStatus.isInProgress) {
+        // 显示旅行进行中提示窗口，并传递新目的地
+        const progressData = {
+          route: {
+            origin: globalTravelData?.origin || '未知起点',
+            destination: globalTravelData?.destination || '未知终点'
+          },
+          progress: currentTravelStatus.progress || 0,
+          newDestination: newDestination // 传递新目的地
+        };
+        createTravelProgressWindow(progressData);
+      } else {
+        // 没有进行中的旅行，正常触发新旅行
+        setTimeout(() => {
+          showScreenshotBubble(newDestination);
+        }, 1200);
+      }
     }
 
     // 如果AI判断需要添加待办，则自动添加到待办列表
@@ -2028,6 +2054,130 @@ function createShortcutSettingsWindow() {
   }
 }
 
+// 创建旅行完成窗口
+function createTravelCompleteWindow(travelData) {
+  try {
+    if (travelCompleteWindow && !travelCompleteWindow.isDestroyed()) {
+      travelCompleteWindow.show();
+      travelCompleteWindow.focus();
+      return travelCompleteWindow;
+    }
+
+    travelCompleteWindow = new BrowserWindow({
+      width: 600,
+      height: 700,
+      frame: false,
+      alwaysOnTop: true,
+      transparent: true,
+      resizable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true
+      },
+      movable: true,
+      focusable: true,
+      show: false
+    });
+
+    travelCompleteWindow.loadFile('travelComplete.html');
+
+    // 将窗口置于屏幕中央
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    travelCompleteWindow.setPosition(
+      Math.round((width - 600) / 2),
+      Math.round((height - 700) / 2)
+    );
+
+    travelCompleteWindow.once('ready-to-show', () => {
+      travelCompleteWindow.show();
+
+      // 发送旅行完成数据到窗口，包含AI识别到的新目的地
+      if (travelData) {
+        // 如果有AI识别到的新目的地，添加到数据中
+        const dataToSend = { ...travelData };
+        if (globalTravelData?.aiNewDestination) {
+          dataToSend.newDestination = globalTravelData.aiNewDestination;
+        }
+        travelCompleteWindow.webContents.send('travel-complete-data', dataToSend);
+      }
+    });
+
+    travelCompleteWindow.on('closed', () => {
+      travelCompleteWindow = null;
+    });
+
+    return travelCompleteWindow;
+  } catch (error) {
+    console.error('Error creating travel complete window:', error);
+  }
+}
+
+// 创建旅行进行中提示窗口
+function createTravelProgressWindow(travelData) {
+  try {
+    if (travelProgressWindow && !travelProgressWindow.isDestroyed()) {
+      travelProgressWindow.show();
+      travelProgressWindow.focus();
+      return travelProgressWindow;
+    }
+
+    travelProgressWindow = new BrowserWindow({
+      width: 500,
+      height: 400,
+      frame: false,
+      alwaysOnTop: true,
+      transparent: true,
+      resizable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true
+      },
+      movable: true,
+      focusable: true,
+      show: false
+    });
+
+    travelProgressWindow.loadFile('travelInProgress.html');
+
+    // 将窗口置于屏幕中央
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    travelProgressWindow.setPosition(
+      Math.round((width - 500) / 2),
+      Math.round((height - 400) / 2)
+    );
+
+    travelProgressWindow.once('ready-to-show', () => {
+      travelProgressWindow.show();
+
+      // 发送旅行进度数据到窗口，包含AI识别到的新目的地
+      if (travelData) {
+        // 如果有AI识别到的新目的地，添加到数据中
+        const dataToSend = { ...travelData };
+        if (globalTravelData?.aiNewDestination) {
+          dataToSend.newDestination = globalTravelData.aiNewDestination;
+        }
+        travelProgressWindow.webContents.send('travel-progress-data', dataToSend);
+      }
+    });
+
+    travelProgressWindow.on('closed', () => {
+      travelProgressWindow = null;
+    });
+
+    return travelProgressWindow;
+  } catch (error) {
+    console.error('Error creating travel progress window:', error);
+  }
+}
+
 // 启动待办提醒系统
 function startTodoReminder() {
   if (todoReminderTimer) {
@@ -2233,6 +2383,149 @@ ipcMain.on('manual-water-reminder', () => {
 // IPC事件处理：手动触发趣味提醒
 ipcMain.on('manual-fun-reminder', async () => {
   await showFunReminder();
+});
+
+// IPC事件处理：关闭旅行完成窗口
+ipcMain.on('close-travel-complete', () => {
+  if (travelCompleteWindow && !travelCompleteWindow.isDestroyed()) {
+    travelCompleteWindow.close();
+  }
+});
+
+// IPC事件处理：关闭旅行进行中提示窗口
+ipcMain.on('close-travel-progress', () => {
+  if (travelProgressWindow && !travelProgressWindow.isDestroyed()) {
+    travelProgressWindow.close();
+  }
+});
+
+// IPC事件处理：开始新旅行
+ipcMain.on('start-new-journey', (event, newDestination) => {
+  // 关闭旅行完成窗口
+  if (travelCompleteWindow && !travelCompleteWindow.isDestroyed()) {
+    travelCompleteWindow.close();
+  }
+
+  // 关闭现有地图窗口
+  if (mapWindow && !mapWindow.isDestroyed()) {
+    mapWindow.close();
+    mapWindow = null;
+  }
+
+  // 重置旅行状态
+  currentTravelStatus = {
+    isInProgress: false,
+    currentLocation: null,
+    currentWeather: null,
+    lastCity: null,
+    totalDistance: 0,
+    traveledDistance: 0,
+    progress: 0,
+    lastWeatherUpdateTime: 0,
+    currentStatus: null,
+    hasInitialStatusGenerated: false
+  };
+
+  globalTravelData = null;
+
+  // 如果有新的目的地，直接开始新旅行
+  if (newDestination) {
+    console.log('Starting new journey with destination:', newDestination);
+    setTimeout(() => {
+      showScreenshotBubble(newDestination);
+    }, 500);
+  } else {
+    // 显示提示消息
+    createPetStatusWindow('请按F2截图开始新的旅行！✈️');
+  }
+});
+
+// IPC事件处理：从旅行进行中窗口开始新旅行
+ipcMain.on('start-new-journey-from-progress', (event, newDestination) => {
+  // 关闭旅行进行中提示窗口
+  if (travelProgressWindow && !travelProgressWindow.isDestroyed()) {
+    travelProgressWindow.close();
+  }
+
+  // 关闭现有地图窗口
+  if (mapWindow && !mapWindow.isDestroyed()) {
+    mapWindow.close();
+    mapWindow = null;
+  }
+
+  // 重置旅行状态
+  currentTravelStatus = {
+    isInProgress: false,
+    currentLocation: null,
+    currentWeather: null,
+    lastCity: null,
+    totalDistance: 0,
+    traveledDistance: 0,
+    progress: 0,
+    lastWeatherUpdateTime: 0,
+    currentStatus: null,
+    hasInitialStatusGenerated: false
+  };
+
+  globalTravelData = null;
+
+  // 如果有新的目的地，直接开始新旅行
+  if (newDestination) {
+    console.log('Starting new journey from progress with destination:', newDestination);
+    setTimeout(() => {
+      showScreenshotBubble(newDestination);
+    }, 500);
+  } else {
+    // 显示提示消息
+    createPetStatusWindow('请按F2截图开始新的旅行！✈️');
+  }
+});
+
+// IPC事件处理：继续当前旅行
+ipcMain.on('continue-current-journey', () => {
+  // 关闭旅行进行中提示窗口
+  if (travelProgressWindow && !travelProgressWindow.isDestroyed()) {
+    travelProgressWindow.close();
+  }
+
+  // 显示当前旅行状态
+  if (currentTravelStatus.isInProgress && currentTravelStatus.currentStatus) {
+    createPetStatusWindow(currentTravelStatus.currentStatus);
+  } else {
+    createPetStatusWindow('正在继续你的云旅行...✈️');
+  }
+});
+
+// IPC事件处理：查看旅行地图
+ipcMain.on('view-journey-map', () => {
+  // 关闭旅行完成窗口
+  if (travelCompleteWindow && !travelCompleteWindow.isDestroyed()) {
+    travelCompleteWindow.close();
+  }
+
+  // 显示地图窗口
+  if (mapWindow && !mapWindow.isDestroyed()) {
+    mapWindow.show();
+    mapWindow.focus();
+  } else if (globalTravelData) {
+    createMapWindow(globalTravelData);
+  } else {
+    createPetStatusWindow('没有可查看的旅行地图');
+  }
+});
+
+// IPC事件处理：旅行完成
+ipcMain.on('travel-completed', (event, travelData) => {
+  console.log('Travel completed:', travelData);
+
+  // 更新旅行状态
+  currentTravelStatus.isInProgress = false;
+
+  // 显示旅行完成窗口
+  createTravelCompleteWindow(travelData);
+
+  // 显示完成提示
+  createPetStatusWindow('🎉 恭喜你完成了一次精彩的云旅行！');
 });
 
 // IPC事件处理：显示当前旅程状态

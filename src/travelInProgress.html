@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>旅行进行中</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        .progress-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            -webkit-app-region: drag;
+            animation: fadeIn 0.4s ease-out;
+            position: relative;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .progress-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .progress-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .progress-subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.4;
+        }
+
+        .current-journey {
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+
+        .journey-text {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-app-region: no-drag;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.9);
+            color: #3498db;
+            border: 2px solid #3498db;
+        }
+
+        .btn-secondary:hover {
+            background: #3498db;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+            transition: all 0.3s ease;
+            -webkit-app-region: no-drag;
+            z-index: 1000;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            color: #333;
+            transform: scale(1.1);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #27ae60;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            50% {
+                opacity: 1;
+            }
+
+            51%,
+            100% {
+                opacity: 0.3;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="progress-container">
+        <button class="close-btn" id="closeBtn">×</button>
+        <div class="progress-icon">✈️</div>
+        <div class="progress-title">旅行进行中</div>
+        <div class="progress-subtitle">
+            <span class="status-indicator"></span>
+            你正在享受云旅行，是否要开始新的旅程？
+        </div>
+
+        <div class="current-journey">
+            <div class="journey-text" id="currentJourney">武汉光谷 → 北京天安门</div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="continueBtn">继续当前旅行</button>
+            <button class="btn btn-secondary" id="newJourneyBtn">开始新旅行</button>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        // 获取DOM元素
+        const closeBtn = document.getElementById('closeBtn');
+        const continueBtn = document.getElementById('continueBtn');
+        const newJourneyBtn = document.getElementById('newJourneyBtn');
+        const currentJourney = document.getElementById('currentJourney');
+
+        // 关闭窗口
+        closeBtn.addEventListener('click', () => {
+            ipcRenderer.send('close-travel-progress');
+        });
+
+        // 继续当前旅行
+        continueBtn.addEventListener('click', () => {
+            ipcRenderer.send('continue-current-journey');
+        });
+
+        // 开始新旅行
+        newJourneyBtn.addEventListener('click', () => {
+            // 获取AI识别到的新目的地（如果有的话）
+            const newDestination = window.aiNewDestination || null;
+            ipcRenderer.send('start-new-journey-from-progress', newDestination);
+        });
+
+        // 监听旅行进度数据
+        ipcRenderer.on('travel-progress-data', (event, data) => {
+            console.log('Received travel progress data:', data);
+
+            // 更新界面信息
+            if (data.route) {
+                currentJourney.textContent = `${data.route.origin} → ${data.route.destination}`;
+            }
+
+            // 保存AI识别到的新目的地（如果有的话）
+            if (data.newDestination) {
+                window.aiNewDestination = data.newDestination;
+                console.log('Saved new destination for restart:', data.newDestination);
+            }
+        });
+
+        // 自动关闭倒计时
+        let autoCloseTimer = setTimeout(() => {
+            ipcRenderer.send('close-travel-progress');
+        }, 15000); // 15秒后自动关闭
+
+        // 用户交互时重置倒计时
+        document.addEventListener('click', () => {
+            clearTimeout(autoCloseTimer);
+            autoCloseTimer = setTimeout(() => {
+                ipcRenderer.send('close-travel-progress');
+            }, 15000);
+        });
+
+        console.log('Travel progress window loaded');
+    </script>
+</body>
+
+</html>
