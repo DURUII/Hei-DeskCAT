@@ -240,6 +240,14 @@
             line-height: 1.4;
         }
 
+        .sensitive-warning {
+            color: #ff6b6b;
+            font-weight: 500;
+            font-size: 11px;
+            margin-top: 4px;
+            display: block;
+        }
+
         /* 快捷操作区域 */
         .controls-section {
             margin-bottom: 30px;
@@ -487,7 +495,9 @@
             <div class="feature-card">
                 <span class="feature-icon">📸</span>
                 <div class="feature-title">智能截图</div>
-                <div class="feature-desc">截图即响应，AI帮你分析内容并生成有趣回应</div>
+                <div class="feature-desc">截图即响应，AI帮你分析内容并生成有趣回应
+                    <span class="sensitive-warning">⚠️ 请勿截图包含敏感信息的内容</span>
+                </div>
             </div>
             <div class="feature-card">
                 <span class="feature-icon">⏰</span>
@@ -517,7 +527,7 @@
                     🤸 趣味互动
                 </button>
                 <button class="control-btn" id="statusBtn">
-                    📊 查看状态
+                    🗺️ 旅行状态
                 </button>
                 <button class="control-btn" id="todoBtn">
                     📋 待办清单
