@@ -115,6 +115,11 @@
             <span>快捷键设置</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item" id="openPetSettings">
+            <span>🐱</span>
+            <span>桌宠设置</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item transparency-control" id="transparencyControl">
             <span>🎨</span>
             <span>透明度调节</span>
@@ -133,6 +138,7 @@
             const openMapWindow = document.getElementById('openMapWindow');
             const openTodoWindow = document.getElementById('openTodoWindow');
             const openShortcutSettings = document.getElementById('openShortcutSettings');
+            const openPetSettings = document.getElementById('openPetSettings');
             const exitApp = document.getElementById('exitApp');
             const contextMenu = document.getElementById('contextMenu');
             const transparencyControl = document.getElementById('transparencyControl');
@@ -216,6 +222,17 @@
                     window.close();
                 } catch (error) {
                     console.error('Error opening shortcut settings:', error);
+                }
+            });
+
+            // 打开桌宠设置窗口
+            openPetSettings.addEventListener('click', () => {
+                console.log('Opening pet settings from context menu');
+                try {
+                    ipcRenderer.send('open-pet-settings');
+                    window.close();
+                } catch (error) {
+                    console.error('Error opening pet settings:', error);
                 }
             });
 

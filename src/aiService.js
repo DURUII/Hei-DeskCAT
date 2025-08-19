@@ -76,6 +76,39 @@ function extractFallbackResponse(response) {
 }
 
 /**
+ * 获取桌宠设置
+ * @returns {Object} 桌宠设置对象
+ */
+function getPetSettings() {
+    // 在Node.js环境中，我们使用默认设置
+    // 实际的设置会通过IPC从渲染进程传递
+    return {
+        petName: '小黑',
+        petCharacter: '你是罗小黑，是一个幼年小猫妖，对世界充满好奇，喜欢旅行，嫉恶如仇，早安喵，午安喵，晚安喵喵喵。性格活泼可爱，喜欢卖萌，经常用可爱的语气说话，对新鲜事物充满好奇。'
+    };
+}
+
+// 全局变量存储桌宠设置
+let globalPetSettings = getPetSettings();
+
+/**
+ * 更新桌宠设置
+ * @param {Object} settings - 新的桌宠设置
+ */
+function updatePetSettings(settings) {
+    globalPetSettings = settings;
+    console.log('Pet settings updated:', settings);
+}
+
+/**
+ * 获取当前桌宠设置
+ * @returns {Object} 当前桌宠设置
+ */
+function getCurrentPetSettings() {
+    return globalPetSettings;
+}
+
+/**
  * 分析截图内容并生成响应
  * @param {string} base64Image - 截图的base64编码
  * @returns {Promise<Object>} 生成的响应文本和是否触发旅行的标志
@@ -158,12 +191,18 @@ async function analyzeScreenshot(base64Image) {
         console.log("Model:", "qwen-vl-plus");
         console.log("Image size:", base64Image.length, "characters");
 
+        // 获取桌宠设置
+        const petSettings = getCurrentPetSettings();
+        console.log("Pet settings:", petSettings);
+
         const completion = await openai.chat.completions.create({
             model: "qwen-vl-plus",
             messages: [
                 {
                     role: "system",
-                    content: `你是罗小黑，是一个幼年小猫妖，对世界充满好奇，喜欢旅行，嫉恶如仇，早安喵，午安喵，晚安喵喵喵。人类会发送截图给你，你需要分析截图内容并给出回应。
+                    content: `${petSettings.petCharacter}
+
+                    人类会发送截图给你，你需要分析截图内容并给出回应。
 
                     分析规则：
                     1. 旅行触发：如果截图包含风景、旅游景点、地标建筑等适合旅行的地方，建议旅行
@@ -171,6 +210,7 @@ async function analyzeScreenshot(base64Image) {
                     3. 内容检索：如果截图包含文档、文章、代码、学习资料等需要保存或检索的内容，建议内容检索
                     4. 日常互动：如果是工作文档、聊天界面、游戏等日常内容，给出有趣回应，看到辛苦忙碌表达关怀，看到笑话会笑，看到好吃的就流口水肚子饿了，看到被老板PUA他是坏人气哄哄等等。注意：日常互动不触发任何额外事件（旅行、待办、检索），仅显示AI生成的互动信息
                     5. 回应应该简短、有趣且富有想象力，不超过20个字
+                    6. 记住你的名字是${petSettings.petName}，在回应中保持你的性格特点
 
                     请严格按照以下JSON格式回复，不要添加任何其他内容，不要包含\`\`\`json等关键字：
                     {
@@ -331,16 +371,19 @@ async function analyzeScreenshot(base64Image) {
  * @returns {Promise<string>} 生成的提醒文本
  */
 async function generateFunReminder() {
+    // 获取桌宠设置
+    const petSettings = getCurrentPetSettings();
+
     // 即使没有配置API Key，也返回默认提醒
     try {
         // 如果没有配置API Key，则返回默认提醒
         if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("API Key not configured, returning default reminder");
             const defaultReminders = [
-                "哇塞这个好好玩！✨",
-                "已加入代办！✅",
-                "脑中突然闪过一个好想法💡",
-                "工作之余，记得微笑😊"
+                `${petSettings.petName}提醒你该休息一下啦！✨`,
+                `${petSettings.petName}觉得你工作很认真呢！💪`,
+                `${petSettings.petName}想和你聊聊天～😊`,
+                `${petSettings.petName}觉得你该喝口水了！💧`
             ];
             return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
         }
@@ -350,7 +393,9 @@ async function generateFunReminder() {
             messages: [
                 {
                     role: "system",
-                    content: "你是一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字。"
+                    content: `${petSettings.petCharacter}
+
+                    你是${petSettings.petName}，一个有趣的桌面伴侣助手。你需要生成一些有趣的提醒消息，比如鼓励、幽默或温馨的提醒。保持简短，不超过20个字，要符合你的性格特点。`
                 },
                 {
                     role: "user",
@@ -365,10 +410,10 @@ async function generateFunReminder() {
         console.error('Error occurred during AI reminder generation:', error);
         // 出错时返回默认提醒
         const defaultReminders = [
-            "哇塞这个好好玩！✨",
-            "已加入代办！✅",
-            "脑中突然闪过一个好想法💡",
-            "工作之余，记得微笑😊"
+            `${petSettings.petName}提醒你该休息一下啦！✨`,
+            `${petSettings.petName}觉得你工作很认真呢！💪`,
+            `${petSettings.petName}想和你聊聊天～😊`,
+            `${petSettings.petName}觉得你该喝口水了！💧`
         ];
         return defaultReminders[Math.floor(Math.random() * defaultReminders.length)];
     }
@@ -381,12 +426,15 @@ async function generateFunReminder() {
  * @returns {Promise<string>} 生成的状态描述
  */
 async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
+    // 获取桌宠设置
+    const petSettings = getCurrentPetSettings();
+
     // 即使没有配置API Key，也返回默认状态
     try {
         // 检查参数是否有效
         if (!locationInfo || !weatherInfo) {
             console.log("Invalid location or weather info, returning default status");
-            return "正在旅行中...";
+            return `${petSettings.petName}正在旅行中...`;
         }
 
         // 如果没有配置API Key，则返回默认状态
@@ -397,11 +445,11 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
             const temperature = weatherInfo.temperature || "舒适";
 
             const defaultStatuses = [
-                `正在${cityName}欣赏美丽风景✨`,
-                `在${cityName}感受${weatherDesc}🌤️`,
-                `正于${cityName}体验${temperature}度的${weatherDesc}😊`,
-                `${cityName}的${weatherDesc}太适合旅行啦🌞`,
-                `在${cityName}看风景，${temperature}度刚刚好😊`
+                `${petSettings.petName}正在${cityName}欣赏美丽风景✨`,
+                `${petSettings.petName}在${cityName}感受${weatherDesc}🌤️`,
+                `${petSettings.petName}正于${cityName}体验${temperature}度的${weatherDesc}😊`,
+                `${petSettings.petName}说${cityName}的${weatherDesc}太适合旅行啦🌞`,
+                `${petSettings.petName}在${cityName}看风景，${temperature}度刚刚好😊`
             ];
             return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
         }
@@ -416,16 +464,18 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
             messages: [
                 {
                     role: "system",
-                    content: "你是一个有趣的桌面伴侣助手。用户有一个正在旅行的小旅星，你需要描述它当前的状态和位置。保持简短，不超过20个字。"
+                    content: `${petSettings.petCharacter}
+
+                    你是${petSettings.petName}，一个有趣的桌面伴侣助手。用户有一个正在旅行的桌宠，你需要描述它当前的状态和位置。保持简短，不超过20个字，要符合你的性格特点。`
                 },
                 {
                     role: "user",
-                    content: `我的小旅星现在在${cityName}，天气是${weatherDesc}，温度${temperature}度。它在做什么？以下是几个示例：
-                                正在${cityName}欣赏美丽风景✨,
-                                在${cityName}感受${weatherDesc}🌤️,
-                                正于${cityName}体验${temperature}度的${weatherDesc}😊,
-                                ${cityName}的${weatherDesc}太适合旅行啦,
-                                在${cityName}看风景，${temperature}度刚刚好😊`
+                    content: `我的${petSettings.petName}现在在${cityName}，天气是${weatherDesc}，温度${temperature}度。它在做什么？以下是几个示例：
+                                ${petSettings.petName}正在${cityName}欣赏美丽风景✨,
+                                ${petSettings.petName}在${cityName}感受${weatherDesc}🌤️,
+                                ${petSettings.petName}正于${cityName}体验${temperature}度的${weatherDesc}😊,
+                                ${petSettings.petName}说${cityName}的${weatherDesc}太适合旅行啦,
+                                ${petSettings.petName}在${cityName}看风景，${temperature}度刚刚好😊`
                 }
             ],
             max_tokens: 50
@@ -440,7 +490,7 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
 
         // 确保状态不为空
         if (!status) {
-            status = `正在${cityName}旅行中...`;
+            status = `${petSettings.petName}正在${cityName}旅行中...`;
         }
 
         return status;
@@ -453,16 +503,16 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
             const temperature = (weatherInfo && weatherInfo.temperature) || "舒适";
 
             const defaultStatuses = [
-                `正在${cityName}欣赏美丽风景✨`,
-                `在${cityName}感受${weatherDesc}🌤️`,
-                `正于${cityName}体验${temperature}度的${weatherDesc}😊`,
-                `${cityName}的${weatherDesc}太适合旅行啦🌞`,
-                `在${cityName}看风景，${temperature}度刚刚好😊`
+                `${petSettings.petName}正在${cityName}欣赏美丽风景✨`,
+                `${petSettings.petName}在${cityName}感受${weatherDesc}🌤️`,
+                `${petSettings.petName}正于${cityName}体验${temperature}度的${weatherDesc}😊`,
+                `${petSettings.petName}说${cityName}的${weatherDesc}太适合旅行啦🌞`,
+                `${petSettings.petName}在${cityName}看风景，${temperature}度刚刚好😊`
             ];
             return defaultStatuses[Math.floor(Math.random() * defaultStatuses.length)];
         } catch (defaultError) {
             console.error('Error generating default status:', defaultError);
-            return "正在旅行中...";
+            return `${petSettings.petName}正在旅行中...`;
         }
     }
 }
@@ -470,5 +520,7 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
 module.exports = {
     analyzeScreenshot,
     generateFunReminder,
-    generateJourneyStatusWithLocation
+    generateJourneyStatusWithLocation,
+    updatePetSettings,
+    getCurrentPetSettings
 };

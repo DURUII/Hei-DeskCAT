@@ -53,10 +53,10 @@ class ActivityMonitor {
   }
 
   startActivityCheck() {
-    this.activityCheckInterval = setInterval(() => {
+    this.activityCheckInterval = setInterval(async () => {
       this.checkInactivity();
       this.checkWaterReminder();
-      this.checkFunReminder();
+      await this.checkFunReminder();
     }, this.checkInterval);
   }
 
@@ -92,13 +92,13 @@ class ActivityMonitor {
   }
 
   // 检查趣味提醒
-  checkFunReminder() {
+  async checkFunReminder() {
     const now = Date.now();
     const funDuration = now - this.lastFunReminder;
 
     // 如果超过设定时间
     if (funDuration > this.funReminderThreshold) {
-      this.showFunReminder();
+      await this.showFunReminder();
       // 重置趣味提醒时间
       this.lastFunReminder = now;
     }

@@ -5,7 +5,7 @@ const { app, BrowserWindow, globalShortcut, Notification, ipcMain, Menu } = requ
 const Screenshots = require('electron-screenshots');
 const path = require('path');
 const { ActivityMonitor, setCreatePetStatusWindowFunction, setCreateWaterReminderWindowFunction } = require('./activityMonitor');
-const { analyzeScreenshot, generateFunReminder } = require('./aiService');
+const { analyzeScreenshot, generateFunReminder, updatePetSettings } = require('./aiService');
 const AMapService = require('./amapService');
 const weatherService = require('./weatherService');
 
@@ -28,6 +28,7 @@ let waterReminderWindow;
 let petWindow;
 let todoWindow = null; // 待办窗口
 let shortcutSettingsWindow = null; // 快捷键设置窗口
+let petSettingsWindow = null; // 桌宠设置窗口
 let contextMenuWindow = null;
 let transparencyWindow = null; // 添加右键菜单窗口跟踪
 let screenshots = null; // 第三方区域截屏实例
@@ -257,9 +258,9 @@ function createPetWindow() {
   });
 
   // 监听宠物点击事件 - 触发趣味提醒
-  ipcMain.on('pet-clicked', (event) => {
+  ipcMain.on('pet-clicked', async (event) => {
     console.log('Pet clicked, triggering fun reminder');
-    showFunReminder();
+    await showFunReminder();
   });
 
   // 监听打开主窗口事件
@@ -885,6 +886,23 @@ function createPetWindow() {
     }
   });
 
+  // 监听打开桌宠设置窗口请求
+  ipcMain.on('open-pet-settings', (event) => {
+    console.log('Opening pet settings window from context menu');
+    try {
+      createPetSettingsWindow();
+    } catch (error) {
+      console.error('Error opening pet settings window:', error);
+    }
+  });
+
+  // 监听桌宠设置更新请求
+  ipcMain.on('pet-settings-updated', (event, settings) => {
+    console.log('Pet settings updated:', settings);
+    // 更新AI服务中的桌宠设置
+    updatePetSettings(settings);
+  });
+
   // 监听打开快捷键设置窗口请求
   ipcMain.on('open-shortcut-settings', (event) => {
     console.log('Opening shortcut settings window from context menu');
@@ -1137,8 +1155,8 @@ function loadAndRegisterShortcuts() {
 
         console.log(`Registering shortcut: ${action} -> ${accelerator}`);
 
-        const success = globalShortcut.register(accelerator, () => {
-          handleShortcutAction(action);
+        const success = globalShortcut.register(accelerator, async () => {
+          await handleShortcutAction(action);
         });
 
         if (success) {
@@ -1181,8 +1199,8 @@ function updateGlobalShortcuts(shortcuts) {
 
         console.log(`Registering shortcut: ${action} -> ${accelerator}`);
 
-        const success = globalShortcut.register(accelerator, () => {
-          handleShortcutAction(action);
+        const success = globalShortcut.register(accelerator, async () => {
+          await handleShortcutAction(action);
         });
 
         if (success) {
@@ -1202,7 +1220,7 @@ function updateGlobalShortcuts(shortcuts) {
 }
 
 // 处理快捷键动作
-function handleShortcutAction(action) {
+async function handleShortcutAction(action) {
   try {
     console.log(`Shortcut action triggered: ${action}`);
 
@@ -1224,7 +1242,7 @@ function handleShortcutAction(action) {
         createWaterReminderWindow();
         break;
       case 'fun-reminder':
-        showFunReminder();
+        await showFunReminder();
         break;
       case 'toggle-pet':
         togglePetWindow();
@@ -1290,23 +1308,15 @@ function handleShortcutAction(action) {
 }
 
 // 显示趣味提醒
-function showFunReminder() {
+async function showFunReminder() {
   try {
-    const funMessages = [
-      '🌟 小旅星提醒：该休息一下啦！',
-      '🎵 听首歌放松一下吧～',
-      '☕ 来杯咖啡提提神！',
-      '🌱 站起来活动一下身体吧！',
-      '🎮 玩个小游戏放松一下～',
-      '📚 读一页书，增长知识！',
-      '🎨 画个小画，发挥创意！',
-      '🍎 吃个水果，补充维生素！'
-    ];
-
-    const randomMessage = funMessages[Math.floor(Math.random() * funMessages.length)];
-    createPetStatusWindow(randomMessage);
+    // 生成AI趣味提醒
+    const funMessage = await generateFunReminder();
+    createPetStatusWindow(funMessage);
   } catch (error) {
     console.error('Error showing fun reminder:', error);
+    // 如果生成失败，显示默认消息
+    createPetStatusWindow('今天也要开开心心的哦！✨');
   }
 }
 
@@ -1872,6 +1882,101 @@ function createTodoWindow() {
   }
 }
 
+// 创建桌宠设置窗口
+function createPetSettingsWindow() {
+  try {
+    if (petSettingsWindow && !petSettingsWindow.isDestroyed()) {
+      petSettingsWindow.show();
+      petSettingsWindow.focus();
+      return petSettingsWindow;
+    }
+
+    petSettingsWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      frame: false,
+      alwaysOnTop: false,
+      resizable: true,
+      skipTaskbar: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        enableRemoteModule: true
+      },
+      movable: true,
+      focusable: true,
+      show: false
+    });
+
+    petSettingsWindow.loadFile('petSettings.html');
+
+    // 将窗口置于屏幕中央
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    petSettingsWindow.setPosition(
+      Math.round((width - 500) / 2),
+      Math.round((height - 700) / 2)
+    );
+
+    petSettingsWindow.once('ready-to-show', () => {
+      petSettingsWindow.show();
+    });
+
+    petSettingsWindow.on('closed', () => {
+      petSettingsWindow = null;
+    });
+
+    return petSettingsWindow;
+  } catch (error) {
+    console.error('Error creating pet settings window:', error);
+  }
+}
+
+// 检查并显示桌宠设置窗口（首次启动时）
+function checkAndShowPetSettingsOnStartup() {
+  try {
+    // 检查是否已经设置过桌宠（通过检查localStorage）
+    // 由于主进程无法直接访问localStorage，我们通过渲染进程来检查
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          try {
+            const savedSettings = localStorage.getItem('petSettings');
+            return savedSettings ? true : false;
+          } catch (error) {
+            console.error('Error checking pet settings:', error);
+            return false;
+          }
+        })()
+      `).then((hasSettings) => {
+        if (!hasSettings) {
+          console.log('首次启动，显示桌宠设置窗口');
+          // 延迟一点时间，确保主窗口已经完全加载
+          setTimeout(() => {
+            createPetSettingsWindow();
+          }, 2000);
+        } else {
+          console.log('桌宠已设置，跳过设置窗口');
+        }
+      }).catch((error) => {
+        console.error('Error checking pet settings on startup:', error);
+        // 如果检查失败，默认显示设置窗口
+        setTimeout(() => {
+          createPetSettingsWindow();
+        }, 2000);
+      });
+    } else {
+      // 如果主窗口还没准备好，延迟检查
+      setTimeout(() => {
+        checkAndShowPetSettingsOnStartup();
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('Error in checkAndShowPetSettingsOnStartup:', error);
+  }
+}
+
 // 创建快捷键设置窗口
 function createShortcutSettingsWindow() {
   try {
@@ -2126,8 +2231,8 @@ ipcMain.on('manual-water-reminder', () => {
 });
 
 // IPC事件处理：手动触发趣味提醒
-ipcMain.on('manual-fun-reminder', () => {
-  showFunReminder();
+ipcMain.on('manual-fun-reminder', async () => {
+  await showFunReminder();
 });
 
 // IPC事件处理：显示当前旅程状态
@@ -2198,6 +2303,9 @@ app.whenReady().then(() => {
 
     // 启动待办提醒系统
     startTodoReminder();
+
+    // 检查是否需要显示桌宠设置窗口（首次启动时）
+    checkAndShowPetSettingsOnStartup();
   }, 1000);
 }).catch(err => {
   console.error('Failed to initialize app:', err);
