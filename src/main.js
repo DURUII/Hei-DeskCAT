@@ -1005,7 +1005,7 @@ function handleAIResponse(aiResponse) {
     // 如果AI判断需要触发旅行，则显示气泡提示
     if (aiResponse.actions?.travel?.shouldTrigger) {
       setTimeout(() => {
-        showScreenshotBubble(aiResponse.message);
+        showScreenshotBubble(aiResponse.actions.travel.destination);
       }, 1200);
     }
 
