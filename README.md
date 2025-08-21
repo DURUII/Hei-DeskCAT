@@ -78,10 +78,10 @@ graph TD
 
 | 阶段         | AI 角色              | 截屏                                        | 产出                                 |
 | ------------ | -------------------- | ------------------------------------------- | ------------------------------------ |
-| 需求分析     | 产品（Kimi）         | ![gif](./docs/llm/20250806-kimi-du.gif)     | [产品需求文档 (PRD)](./docs/PRD.md)  |
-| 竞品调研     | 市场（GPT Research） | ![gif](./docs/llm/20250806-research-du.gif) | [竞品调研报告](./docs/Research.docx) |
-| MVP 实现     | 前端（通义灵码）     | ![gif](./docs/llm/20250806-lingma-du.gif)   | [V1 文档/代码](./docs/V1.md)         |
-| 功能/UI 完善 | 前端（Cursor）       | ![gif](./docs/llm/20250812-cursor-du.gif)   | [V2 文档/代码](./docs/V2.md)         |
+| 需求分析     | 产品（Kimi）         | ![gif](./demo/llm/20250806-kimi-du.gif)     | [产品需求文档 (PRD)](./docs/PRD.md)  |
+| 竞品调研     | 市场（GPT Research） | ![gif](./demo/llm/20250806-research-du.gif) | [竞品调研报告](./docs/Research.docx) |
+| MVP 实现     | 前端（通义灵码）     | ![gif](./demo/llm/20250806-lingma-du.gif)   | [V1 文档/代码](./docs/V1.md)         |
+| 功能/UI 完善 | 前端（Cursor）       | ![gif](./demo/llm/20250812-cursor-du.gif)   | [V2 文档/代码](./docs/V2.md)         |
 
 - cursor AI 对话记录：[杜睿](./docs/llm/20250812-cursor-du.md) 、[刘柏成1](./docs/llm/20250813-cursor-liu.md) 、[刘柏成2](./docs/llm/20250815-cursor-liu.md)
 - AI 对话留痕（持续更新）：`./docs/llm`，`md`文件若大可能无法预览请下载查看。
