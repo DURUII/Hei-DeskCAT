@@ -1,12 +1,13 @@
 const https = require('https');
 const querystring = require('querystring');
+const { AMAP_KEY } = require('./config');
 
 /**
  * 高德地图API服务类
  */
 class AMapService {
   constructor() {
-    this.apiKey = process.env.AMAP_KEY || '';
+    this.apiKey = AMAP_KEY || '';
   }
 
   /**

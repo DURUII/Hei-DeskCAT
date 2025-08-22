@@ -1,5 +1,6 @@
 // 加载环境变量
 require('dotenv').config();
+const { AMAP_KEY, IS_AMAP_CONFIGURED } = require('./config');
 
 const { app, BrowserWindow, globalShortcut, Notification, ipcMain, Menu } = require('electron');
 const Screenshots = require('electron-screenshots');
@@ -1723,7 +1724,7 @@ function createMapWindow(travelData = { origin: '武汉光谷', destination: '�
     // 传递API Key
     console.log('Passing API Key to map window');
     mapWindow.webContents.executeJavaScript(`
-      window.AMAP_KEY = '${process.env.AMAP_KEY || ''}';
+      window.AMAP_KEY = '${AMAP_KEY || ''}';
       console.log('API Key set in map window:', window.AMAP_KEY ? window.AMAP_KEY.substring(0, 10) + '...' : 'Not set');
     `);
 
@@ -2576,7 +2577,7 @@ app.whenReady().then(() => {
   console.log('AMap service initialization completed');
 
   // 检查API Key配置
-  if (process.env.AMAP_KEY) {
+  if (IS_AMAP_CONFIGURED) {
     console.log('AMap API Key configured');
   } else {
     console.log('Warning: AMap API Key not configured');

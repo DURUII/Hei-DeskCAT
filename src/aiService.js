@@ -1,9 +1,10 @@
 const OpenAI = require('openai');
+const { DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL } = require('./config');
 
 // 初始化OpenAI客户端
 const openai = new OpenAI({
-    apiKey: process.env.DASHSCOPE_API_KEY || "sk-xxx", // 请配置您的API Key
-    baseURL: process.env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    apiKey: DASHSCOPE_API_KEY,
+    baseURL: DASHSCOPE_BASE_URL
 });
 
 /**
@@ -117,7 +118,7 @@ async function analyzeScreenshot(base64Image) {
     // 即使没有配置API Key，也返回默认响应
     try {
         // 检查API Key配置
-        const apiKey = process.env.DASHSCOPE_API_KEY;
+        const apiKey = DASHSCOPE_API_KEY;
         if (!apiKey || apiKey === "sk-xxx") {
             console.log("API Key not configured, returning default response");
             // 随机决定是否触发旅行（模拟AI判断）
@@ -185,7 +186,7 @@ async function analyzeScreenshot(base64Image) {
         }
 
         console.log("Using API Key:", apiKey.substring(0, 10) + "...");
-        console.log("Base URL:", process.env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1");
+        console.log("Base URL:", DASHSCOPE_BASE_URL);
 
         console.log("Sending request to AI service...");
         console.log("Model:", "qwen-vl-plus");
@@ -394,7 +395,7 @@ async function generateFunReminder(currentTime = new Date()) {
     // 即使没有配置API Key，也返回默认提醒
     try {
         // 如果没有配置API Key，则返回默认提醒
-        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+        if (!DASHSCOPE_API_KEY || DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("API Key not configured, returning default reminder");
             const defaultReminders = [
                 `${petSettings.petName}${timeGreeting}！工作累了吗？休息一下吧～✨`,
@@ -458,7 +459,7 @@ async function generateWaterReminder() {
     // 即使没有配置API Key，也返回默认提醒
     try {
         // 如果没有配置API Key，则返回默认提醒
-        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+        if (!DASHSCOPE_API_KEY || DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("API Key not configured, returning default water reminder");
             const defaultReminders = [
                 `${petSettings.petName}提醒你该喝水啦！💧 再不喝水就要变成仙人掌了～`,
@@ -511,7 +512,7 @@ async function generateInactivityReminder() {
     // 即使没有配置API Key，也返回默认提醒
     try {
         // 如果没有配置API Key，则返回默认提醒
-        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+        if (!DASHSCOPE_API_KEY || DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("API Key not configured, returning default inactivity reminder");
             const defaultReminders = [
                 `${petSettings.petName}提醒你：起来走两步，不然椅子会长你身上！🏃‍♂️`,
@@ -572,7 +573,7 @@ async function generateJourneyStatusWithLocation(locationInfo, weatherInfo) {
         }
 
         // 如果没有配置API Key，则返回默认状态
-        if (!process.env.DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY === "sk-xxx") {
+        if (!DASHSCOPE_API_KEY || DASHSCOPE_API_KEY === "sk-xxx") {
             console.log("API Key not configured, returning default status with location");
             const cityName = locationInfo.city || "某地";
             const weatherDesc = weatherInfo.description || "好天气";

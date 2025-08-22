@@ -1,10 +1,11 @@
 // 天气服务模块
 require('dotenv').config();
+const { AMAP_KEY } = require('./config');
 const https = require('https');
 
 class WeatherService {
     constructor() {
-        this.amapKey = process.env.AMAP_KEY;
+        this.amapKey = AMAP_KEY;
         this.weatherCache = new Map(); // 缓存天气数据
         this.cacheExpiration = 5 * 60 * 1000; // 5分钟缓存过期
         this.currentLocation = null; // 当前位置
