@@ -1,7 +1,7 @@
 
 # HeiDeskCat：让小黑做你的上班搭子
 
-> 内源平台讨论链接：[演示视频](<removed>)
+> 演示视频：[Bilibili](https://www.bilibili.com/video/BV1Y2t9zZEp2/)
 
 如果你也相信 AI 不应该只有智商还应该有情商，或者单纯喜欢罗小黑一样可可爱爱的国漫 IP，请为我们点个 ⭐！
 
@@ -84,7 +84,7 @@ graph TD
 | 功能/UI 完善 | 前端（Cursor）       | ![gif](./demo/llm/20250812-cursor-du.gif)   | [V2 文档/代码](./docs/V2.md)         |
 
 - cursor AI 对话记录：[杜睿](./demo/llm/20250812-cursor-du.md) 、[刘柏成1](./demo/llm/20250813-cursor-liu.md) 、[刘柏成2](./demo/llm/20250815-cursor-liu.md)
-- AI 对话留痕（持续更新）：`./docs/llm`，`md`文件若大可能无法预览请下载查看。
+- AI 对话留痕（持续更新）：`./demo/llm`，`md`文件若大可能无法预览请下载查看。
 
 ## 功能特色
 
@@ -246,6 +246,12 @@ npm run build:win
 
 ## 未来计划
 
-* 声音克隆（[SparkTTS](https://github.com/SparkAudio/Spark-TTS)）实现更拟人化的语音交互（BBS展示视频中声音为AI克隆声音，使用视频后期，计划中）
+* 声音克隆（[SparkTTS](https://github.com/SparkAudio/Spark-TTS)）实现更拟人化的语音交互（展示视频中声音为AI克隆声音，使用视频后期，计划中）
 * 前端采用 three.js 打造更细致的视觉表现，增强 AI 情绪识别与多轮主动对话能力
 * 桌面行为模式学习与个性化推荐
+
+## 版权与授权说明
+
+本仓库以 Apache-2.0 协议开源，**该协议仅覆盖本项目的源代码**。
+
+`src/assets/imgs/罗小黑的生活/` 目录下的角色形象版权归北京寒木春华动画技术有限公司所有。本项目为 2025 年黑客松的非商业二创作品，未获得版权方授权，仅用于学习与技术交流。如版权方认为不妥，请联系我们，我们将立即移除相关素材。

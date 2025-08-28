@@ -258,7 +258,7 @@ Week6 渠道包 + PR 稿 + 灰度 10%
 
 ------------------------------------------------  
 附录 A：原型&文档链接  
-• Figma 原型：https://figma.com/DeskTripper_v1_RRD  
+• Figma 原型：<removed>  
 • API 文档：<removed>  
 • 数据看板：<removed>  
 

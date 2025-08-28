@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DeskTripper/DeskTripper.git"
+    "url": "git+https://github.com/DURUII/Hei-DeskCAT.git"
   },
   "keywords": [
     "electron",
@@ -23,11 +23,11 @@
     "desktop"
   ],
   "author": "DeskTripper Team",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/DeskTripper/DeskTripper/issues"
+    "url": "https://github.com/DURUII/Hei-DeskCAT/issues"
   },
-  "homepage": "https://github.com/DeskTripper/DeskTripper#readme",
+  "homepage": "https://github.com/DURUII/Hei-DeskCAT#readme",
   "devDependencies": {
     "electron": "^21.0.0",
     "electron-builder": "^23.0.0"
