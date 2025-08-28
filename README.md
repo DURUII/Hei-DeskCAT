@@ -83,7 +83,7 @@ graph TD
 | MVP 实现     | 前端（通义灵码）     | ![gif](./demo/llm/20250806-lingma-du.gif)   | [V1 文档/代码](./docs/V1.md)         |
 | 功能/UI 完善 | 前端（Cursor）       | ![gif](./demo/llm/20250812-cursor-du.gif)   | [V2 文档/代码](./docs/V2.md)         |
 
-- cursor AI 对话记录：[杜睿](./docs/llm/20250812-cursor-du.md) 、[刘柏成1](./docs/llm/20250813-cursor-liu.md) 、[刘柏成2](./docs/llm/20250815-cursor-liu.md)
+- cursor AI 对话记录：[杜睿](./demo/llm/20250812-cursor-du.md) 、[刘柏成1](./demo/llm/20250813-cursor-liu.md) 、[刘柏成2](./demo/llm/20250815-cursor-liu.md)
 - AI 对话留痕（持续更新）：`./docs/llm`，`md`文件若大可能无法预览请下载查看。
 
 ## 功能特色
